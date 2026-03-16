@@ -194,7 +194,7 @@ variable "certificate_arn" {
 variable "alb_enforce_https_only" {
   description = "Enforce HTTPS-only ALB listeners"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "alb_web_acl_arn" {
