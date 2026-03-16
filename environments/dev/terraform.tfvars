@@ -1,0 +1,59 @@
+environment  = "dev"
+project_name = "mypythonproject1-dev"
+aws_region   = "us-east-1"
+
+# Kubeconfig — run: aws eks update-kubeconfig --name mypythonproject1-dev-eks --region us-east-1
+kubeconfig_path    = "~/.kube/config"
+kubeconfig_context = "arn:aws:eks:us-east-1:388252587928:cluster/mypythonproject1-dev-eks"
+
+# Networking
+vpc_cidr              = "10.0.0.0/16"
+availability_zones    = ["us-east-1a", "us-east-1b"]
+public_subnet_cidrs   = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs  = ["10.0.10.0/24", "10.0.11.0/24"]
+database_subnet_cidrs = ["10.0.20.0/24", "10.0.21.0/24"]
+app_port              = 8000
+frontend_port         = 4200
+
+# RDS
+db_name                  = "gamedb"
+db_username              = "postgres"
+db_engine_version        = "17.6"
+db_instance_class        = "db.t3.micro"
+db_allocated_storage     = 20
+db_max_allocated_storage = 100
+backup_retention_days    = 7
+multi_az                 = false
+log_retention_days       = 3
+
+# EKS
+kubernetes_version     = "1.32"
+endpoint_public_access = true
+node_instance_types    = ["t3.medium"]
+node_capacity_type     = "SPOT"
+node_disk_size         = 20
+desired_node_count     = 1
+min_node_count         = 1
+max_node_count         = 3
+app_namespace          = "app"
+app_service_account    = "app-sa"
+
+# ALB & Security
+health_check_path = "/health"
+certificate_arn   = ""
+
+# Helm System Add-ons (override chart versions if needed)
+# alb_controller_chart_version      = "1.10.0"
+# cluster_autoscaler_chart_version  = "9.46.0"
+
+# ArgoCD
+argocd_chart_version      = "7.8.3"
+argocd_hostname           = "argocd.dev.example.com" # Replace with your domain
+argocd_ingress_enabled    = true
+argocd_server_replicas    = 1
+argocd_create_app_project = false # Enable after first apply
+
+# App-of-apps bootstrap (set after ArgoCD is running)
+argocd_app_repo_url = "" # e.g. https://github.com/org/mypythonproject1
+argocd_app_revision = "dev"
+argocd_app_path     = "k8s/overlay/dev"
