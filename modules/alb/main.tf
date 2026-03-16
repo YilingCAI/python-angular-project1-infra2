@@ -6,6 +6,8 @@
  * - Access logs to S3
  */
 
+data "aws_caller_identity" "current" {}
+
 # S3 bucket for ALB logs
 resource "aws_s3_bucket" "alb_logs" {
   bucket_prefix = "${var.project_name}-alb-logs-"
@@ -33,6 +35,38 @@ resource "aws_kms_key" "alb_logs" {
   tags = {
     Name = "${var.project_name}-alb-logs-key"
   }
+}
+
+resource "aws_kms_key_policy" "alb_logs" {
+  key_id = aws_kms_key.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowS3UseOfKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_kms_alias" "alb_logs" {
@@ -70,10 +104,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
     expiration {
       days = 365
     }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
   }
 }
 
 # S3 bucket logging (CKV_AWS_18)
+#checkov:skip=CKV2_AWS_62:ALB log bucket does not require event notifications for this architecture.
 resource "aws_s3_bucket_logging" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
 
@@ -151,10 +190,11 @@ resource "aws_lb" "main" {
 
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.id
-    enabled = false
+    enabled = true
     prefix  = "alb-logs"
   }
 
+  drop_invalid_header_fields       = true
   enable_deletion_protection       = true
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
@@ -162,9 +202,24 @@ resource "aws_lb" "main" {
   tags = {
     Name = "${var.project_name}-alb"
   }
+
+  lifecycle {
+    precondition {
+      condition     = !var.enforce_https_only || var.certificate_arn != ""
+      error_message = "enforce_https_only=true requires certificate_arn to be set."
+    }
+  }
+}
+
+resource "aws_wafv2_web_acl_association" "main" {
+  count = var.web_acl_arn != "" ? 1 : 0
+
+  resource_arn = aws_lb.main.arn
+  web_acl_arn  = var.web_acl_arn
 }
 
 # Target Group (CKV_AWS_378 - use HTTPS for protocol)
+#checkov:skip=CKV_AWS_378:ALB terminates TLS; backend traffic remains private in VPC.
 resource "aws_lb_target_group" "app" {
   name_prefix          = "app-"
   port                 = var.app_port
@@ -194,6 +249,7 @@ resource "aws_lb_target_group" "app" {
 }
 
 resource "aws_lb_target_group" "frontend" {
+  #checkov:skip=CKV_AWS_378:ALB terminates TLS; backend traffic remains private in VPC.
   name_prefix          = "fe-"
   port                 = var.frontend_port
   protocol             = "HTTP"
@@ -234,8 +290,10 @@ resource "aws_lb_listener" "http_redirect" {
 }
 
 # HTTP Listener (forward to app when certificate is not configured)
+#checkov:skip=CKV_AWS_2:HTTP listener fallback exists only for environments without ACM certificate.
+#checkov:skip=CKV_AWS_103:TLS 1.2 policy is enforced on HTTPS listener when certificate is configured.
 resource "aws_lb_listener" "http_forward" {
-  count             = var.certificate_arn == "" ? 1 : 0
+  count             = var.certificate_arn == "" && !var.enforce_https_only ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
@@ -247,7 +305,7 @@ resource "aws_lb_listener" "http_forward" {
 }
 
 resource "aws_lb_listener_rule" "http_backend_routes_primary" {
-  count        = var.certificate_arn == "" ? 1 : 0
+  count        = var.certificate_arn == "" && !var.enforce_https_only ? 1 : 0
   listener_arn = aws_lb_listener.http_forward[0].arn
   priority     = 100
 
@@ -264,7 +322,7 @@ resource "aws_lb_listener_rule" "http_backend_routes_primary" {
 }
 
 resource "aws_lb_listener_rule" "http_backend_routes_secondary" {
-  count        = var.certificate_arn == "" && length(var.backend_path_patterns) > 5 ? 1 : 0
+  count        = var.certificate_arn == "" && !var.enforce_https_only && length(var.backend_path_patterns) > 5 ? 1 : 0
   listener_arn = aws_lb_listener.http_forward[0].arn
   priority     = 110
 

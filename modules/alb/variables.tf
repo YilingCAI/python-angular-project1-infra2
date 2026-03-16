@@ -47,3 +47,15 @@ variable "certificate_arn" {
   type        = string
   default     = ""
 }
+
+variable "enforce_https_only" {
+  description = "When true, requires certificate_arn and disables HTTP forward fallback"
+  type        = bool
+  default     = false
+}
+
+variable "web_acl_arn" {
+  description = "Optional WAFv2 Web ACL ARN to associate with ALB"
+  type        = string
+  default     = ""
+}

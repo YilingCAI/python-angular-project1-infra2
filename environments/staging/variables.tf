@@ -191,6 +191,18 @@ variable "certificate_arn" {
   default     = ""
 }
 
+variable "alb_enforce_https_only" {
+  description = "Enforce HTTPS-only ALB listeners"
+  type        = bool
+  default     = true
+}
+
+variable "alb_web_acl_arn" {
+  description = "Optional WAFv2 Web ACL ARN to associate to ALB"
+  type        = string
+  default     = ""
+}
+
 # Security & JWT
 variable "jwt_secret_key" {
   description = "JWT secret key"

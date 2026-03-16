@@ -3,7 +3,7 @@ name: Terraform Plan & Apply
 # Promotion pipeline: plan dev → apply dev → plan staging → apply staging → plan prod → apply prod
 #
 # Triggers:
-#   push to main      → full promotion pipeline (plan + apply all envs in order)
+#   workflow_run      → full promotion pipeline only after Terraform Plan Speculative succeeds on push to main
 #   workflow_dispatch → manual plan or apply for a specific environment (promotion rules enforced)
 #
 # Environment protection rules (configured in GitHub repo settings):
@@ -20,15 +20,6 @@ on:
     workflows: ["Terraform Plan Speculative"]
     types: [completed]
     branches: [main]
-
-  push:
-    branches: [main]
-    paths:
-      - '**/*.tf'
-      - '**/*.tfvars'
-      - '**/.terraform.lock.hcl'
-      - '!bootstrap/**'
-
   workflow_dispatch:
     inputs:
       environment:
@@ -54,7 +45,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: terraform-apply-${{ github.event.inputs.environment || 'all' }}-${{ github.ref }}
+  group: terraform-apply-${{ github.event.inputs.environment || 'all' }}-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: false
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -63,7 +54,7 @@ concurrency:
 
 # Promotion guard expression (reused in each job's `if`):
 #   A job for environment X is active when:
-#     • push to main (full pipeline), OR
+#     • successful workflow_run from Terraform Plan Speculative on push to main, OR
 #     • workflow_dispatch targeting X specifically, OR
 #     • workflow_dispatch targeting "all"
 # The `needs` chain enforces sequencing; `if` gates allow individual env runs.
@@ -73,7 +64,11 @@ jobs:
   plan-dev:
     name: Plan [dev]
     if: >-
-      github.event_name == 'push' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'
+      ) ||
       (github.event_name == 'workflow_dispatch' &&
         (inputs.environment == 'dev' || inputs.environment == 'all'))
     uses: ./.github/workflows/terraform-plan-reusable.yml
@@ -93,7 +88,7 @@ jobs:
     if: >-
       needs.plan-dev.result == 'success' &&
       (
-        github.event_name == 'push' ||
+        github.event_name == 'workflow_run' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.environment == 'dev' || inputs.environment == 'all') &&
           inputs.action == 'apply')
@@ -114,7 +109,7 @@ jobs:
     if: >-
       needs.apply-dev.result == 'success' &&
       (
-        github.event_name == 'push' ||
+        github.event_name == 'workflow_run' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.environment == 'staging' || inputs.environment == 'all'))
       )
@@ -135,7 +130,7 @@ jobs:
     if: >-
       needs.plan-staging.result == 'success' &&
       (
-        github.event_name == 'push' ||
+        github.event_name == 'workflow_run' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.environment == 'staging' || inputs.environment == 'all') &&
           inputs.action == 'apply')
@@ -156,7 +151,7 @@ jobs:
     if: >-
       needs.apply-staging.result == 'success' &&
       (
-        github.event_name == 'push' ||
+        github.event_name == 'workflow_run' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.environment == 'prod' || inputs.environment == 'all'))
       )
@@ -177,7 +172,7 @@ jobs:
     if: >-
       needs.plan-prod.result == 'success' &&
       (
-        github.event_name == 'push' ||
+        github.event_name == 'workflow_run' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.environment == 'prod' || inputs.environment == 'all') &&
           inputs.action == 'apply')

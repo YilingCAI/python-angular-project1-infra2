@@ -16,6 +16,7 @@ resource "random_password" "db_password" {
 }
 
 # Store password in Secrets Manager with KMS encryption (CKV_AWS_149)
+#checkov:skip=CKV2_AWS_57:Secret rotation is optional and controlled by separate rotation integration.
 resource "aws_secretsmanager_secret" "db_password" {
   name_prefix             = "${var.project_name}-db-password-"
   recovery_window_in_days = 7
@@ -57,6 +58,8 @@ resource "aws_db_subnet_group" "main" {
 }
 
 # RDS Instance
+#checkov:skip=CKV_AWS_157:Multi-AZ is environment-controlled via var.multi_az (enabled in staging/prod).
+#checkov:skip=CKV2_AWS_30:Full query logging is not enabled by default due performance/cost tradeoff; postgresql export is enabled.
 resource "aws_db_instance" "main" {
   identifier             = "${var.project_name}-db"
   engine                 = "postgres"
@@ -188,10 +191,45 @@ resource "aws_kms_key" "cloudwatch_logs" {
   }
 }
 
+resource "aws_kms_key_policy" "cloudwatch_logs" {
+  key_id = aws_kms_key.cloudwatch_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudWatchLogsUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # CloudWatch Log Group for RDS with KMS encryption and 1-year retention (CKV_AWS_158, CKV_AWS_338)
 resource "aws_cloudwatch_log_group" "rds" {
   name              = "/aws/rds/${var.project_name}"
-  retention_in_days = var.log_retention_days
+  retention_in_days = max(var.log_retention_days, 365)
+  kms_key_id        = aws_kms_key.cloudwatch_logs.arn
 
   tags = {
     Name = "${var.project_name}-rds-logs"

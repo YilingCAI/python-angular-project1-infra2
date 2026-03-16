@@ -87,9 +87,12 @@ module "alb" {
   frontend_port         = var.frontend_port
   health_check_path     = var.health_check_path
   certificate_arn       = var.certificate_arn
+  enforce_https_only    = var.alb_enforce_https_only
+  web_acl_arn           = var.alb_web_acl_arn
 }
 
 # JWT Secret in Secrets Manager (referenced by EKS pods via IRSA)
+#checkov:skip=CKV2_AWS_57:Rotation is managed externally due application-specific rotation workflow.
 resource "aws_secretsmanager_secret" "jwt_secret" {
   name_prefix             = "${var.project_name}-jwt-secret-"
   recovery_window_in_days = 7
@@ -103,7 +106,9 @@ resource "aws_secretsmanager_secret" "jwt_secret" {
 resource "aws_secretsmanager_secret_version" "jwt_secret" {
   secret_id = aws_secretsmanager_secret.jwt_secret.id
   secret_string = jsonencode({
-    JWT_SECRET_KEY = var.jwt_secret_key
+    JWT_SECRET_KEY     = var.jwt_secret_key
+    JWT_ALGORITHM      = var.jwt_algorithm
+    JWT_EXPIRE_MINUTES = var.jwt_expire_minutes
   })
 }
 
