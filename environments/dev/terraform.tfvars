@@ -23,7 +23,7 @@ db_instance_class        = "db.t3.micro"
 db_allocated_storage     = 20
 db_max_allocated_storage = 100
 backup_retention_days    = 7
-multi_az                 = false
+multi_az                 = true
 log_retention_days       = 3
 
 # EKS

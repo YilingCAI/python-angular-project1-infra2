@@ -14,13 +14,6 @@ on:
       - '**/*.tfvars'
       - '**/.terraform.lock.hcl'
       - '!bootstrap/**'
-  push:
-    branches: [main]
-    paths:
-      - '**/*.tf'
-      - '**/*.tfvars'
-      - '**/.terraform.lock.hcl'
-      - '!bootstrap/**'
   workflow_dispatch:
     inputs:
       environment:
@@ -43,7 +36,6 @@ jobs:
     name: Speculative Plan [dev]
     if: >-
       github.event_name == 'pull_request' ||
-      github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' &&
         (inputs.environment == 'dev' || inputs.environment == 'all'))
     uses: ./.github/workflows/terraform-plan-reusable.yml
@@ -63,7 +55,6 @@ jobs:
       needs.plan-dev.result == 'success' &&
       (
         github.event_name == 'pull_request' ||
-        github.event_name == 'push' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.environment == 'staging' || inputs.environment == 'all'))
       )
@@ -84,7 +75,6 @@ jobs:
       needs.plan-staging.result == 'success' &&
       (
         github.event_name == 'pull_request' ||
-        github.event_name == 'push' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.environment == 'prod' || inputs.environment == 'all'))
       )
