@@ -289,55 +289,6 @@ resource "aws_lb_listener" "http_redirect" {
   }
 }
 
-# HTTP Listener (forward to app when certificate is not configured)
-#checkov:skip=CKV_AWS_2:HTTP listener fallback exists only for environments without ACM certificate.
-#checkov:skip=CKV_AWS_103:TLS 1.2 policy is enforced on HTTPS listener when certificate is configured.
-resource "aws_lb_listener" "http_forward" {
-  count             = var.certificate_arn == "" && !var.enforce_https_only ? 1 : 0
-  load_balancer_arn = aws_lb.main.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
-  }
-}
-
-resource "aws_lb_listener_rule" "http_backend_routes_primary" {
-  count        = var.certificate_arn == "" && !var.enforce_https_only ? 1 : 0
-  listener_arn = aws_lb_listener.http_forward[0].arn
-  priority     = 100
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-
-  condition {
-    path_pattern {
-      values = slice(var.backend_path_patterns, 0, min(5, length(var.backend_path_patterns)))
-    }
-  }
-}
-
-resource "aws_lb_listener_rule" "http_backend_routes_secondary" {
-  count        = var.certificate_arn == "" && !var.enforce_https_only && length(var.backend_path_patterns) > 5 ? 1 : 0
-  listener_arn = aws_lb_listener.http_forward[0].arn
-  priority     = 110
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-
-  condition {
-    path_pattern {
-      values = slice(var.backend_path_patterns, 5, length(var.backend_path_patterns))
-    }
-  }
-}
-
 # HTTPS Listener (requires certificate_arn)
 resource "aws_lb_listener" "https" {
   count             = var.certificate_arn != "" ? 1 : 0

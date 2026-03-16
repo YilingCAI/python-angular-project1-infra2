@@ -231,8 +231,6 @@ resource "aws_route_table_association" "private" {
 # ─── Security Groups ────────────────────────────────────────────────────────
 
 # ALB Security Group
-#checkov:skip=CKV_AWS_260:Port 80 is required for HTTP-to-HTTPS redirect.
-#checkov:skip=CKV_AWS_382:ALB requires outbound connectivity to targets.
 #checkov:skip=CKV2_AWS_5:Security group is attached by consuming modules (ALB resource).
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg"
@@ -247,27 +245,18 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "HTTP (redirect to HTTPS)"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
-    description = "All outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description = "Outbound to private workloads"
+    from_port   = 1024
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = var.private_subnet_cidrs
   }
 
   tags = { Name = "${var.project_name}-alb-sg" }
 }
 
 # EKS Node Security Group — allows ALB → nodes and node → node
-#checkov:skip=CKV_AWS_382:Egress to internet is required for node bootstrap, image pulls, and updates.
 #checkov:skip=CKV2_AWS_5:Security group is attached by consuming modules (EKS cluster/node groups).
 resource "aws_security_group" "eks_nodes" {
   name        = "${var.project_name}-eks-nodes-sg"
@@ -291,10 +280,26 @@ resource "aws_security_group" "eks_nodes" {
   }
 
   egress {
-    description = "All outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTPS egress"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "DNS UDP egress"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "DNS TCP egress"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -305,7 +310,6 @@ resource "aws_security_group" "eks_nodes" {
 }
 
 # RDS Security Group
-#checkov:skip=CKV_AWS_382:RDS SG egress is not used for ingress control and is acceptable for managed service operations.
 #checkov:skip=CKV2_AWS_5:Security group is attached by consuming modules (RDS instance).
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
@@ -321,10 +325,10 @@ resource "aws_security_group" "rds" {
   }
 
   egress {
-    description = "All outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "RDS outbound HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
