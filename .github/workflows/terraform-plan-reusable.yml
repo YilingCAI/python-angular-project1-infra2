@@ -86,7 +86,7 @@ jobs:
       plan_artifact_id: ${{ steps.plan_common.outputs.plan_artifact_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Terraform common setup and checks
         uses: ./.github/actions/terraform-setup-common
