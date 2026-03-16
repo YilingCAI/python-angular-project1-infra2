@@ -6,9 +6,9 @@ environments = ["dev", "staging", "prod"]
 
 # Keep names stable to match existing landing-zone resources.
 state_bucket_names = {
-  dev     = "mypythonproject1-tfstate-dev"
-  staging = "mypythonproject1-tfstate-staging"
-  prod    = "mypythonproject1-tfstate-prod"
+  dev     = "mypythonproject1-tfstate-eks-dev"
+  staging = "mypythonproject1-tfstate-eks-staging"
+  prod    = "mypythonproject1-tfstate-eks-prod"
 }
 
 github_actions_role_name = "GitHubActionsRole"
