@@ -115,7 +115,7 @@ locals {
 }
 
 # ─── Namespace ───────────────────────────────────────────────────────────────
-resource "kubernetes_namespace" "argocd" {
+resource "kubernetes_namespace_v1" "argocd" {
   metadata {
     name = "argocd"
 
@@ -132,7 +132,7 @@ resource "helm_release" "argocd" {
   repository      = "https://argoproj.github.io/argo-helm"
   chart           = "argo-cd"
   version         = var.argocd_chart_version
-  namespace       = kubernetes_namespace.argocd.metadata[0].name
+  namespace       = kubernetes_namespace_v1.argocd.metadata[0].name
   atomic          = true
   cleanup_on_fail = true
   timeout         = 600
@@ -141,7 +141,7 @@ resource "helm_release" "argocd" {
 
   values = [yamlencode(local.helm_values)]
 
-  depends_on = [kubernetes_namespace.argocd]
+  depends_on = [kubernetes_namespace_v1.argocd]
 }
 
 # ─── ArgoCD AppProject ────────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ resource "kubernetes_manifest" "app_project" {
     kind       = "AppProject"
     metadata = {
       name      = var.project_name
-      namespace = kubernetes_namespace.argocd.metadata[0].name
+      namespace = kubernetes_namespace_v1.argocd.metadata[0].name
     }
     spec = {
       description = "${var.project_name} — ${var.environment}"
@@ -189,7 +189,7 @@ resource "kubernetes_manifest" "bootstrap_app" {
     kind       = "Application"
     metadata = {
       name       = "${var.project_name}-apps"
-      namespace  = kubernetes_namespace.argocd.metadata[0].name
+      namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
       finalizers = ["resources-finalizer.argocd.argoproj.io"]
       labels = {
         environment = var.environment
