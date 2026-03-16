@@ -1,0 +1,203 @@
+name: Terraform Apply Reusable
+
+# Focused single-responsibility apply workflow:
+#   1. Initialize Terraform/AWS context for this isolated job
+#   2. Verify no drift exists at apply time
+#   3. Download and apply the saved plan artifact from terraform-plan-reusable.yml
+#   4. Write a job summary with rollback metadata
+
+on:
+  workflow_call:
+    inputs:
+      target_environment:
+        description: Terraform target environment (dev/staging/prod)
+        required: true
+        type: string
+      github_environment:
+        description: GitHub Environment name override (falls back to target_environment)
+        required: false
+        type: string
+        default: ""
+      saved_plan_artifact_name:
+        description: Name of the artifact that contains tfplan.binary (produced by terraform-plan-reusable.yml)
+        required: true
+        type: string
+      saved_plan_artifact_id:
+        description: Exact artifact ID to download (preferred; avoids name collisions on reruns)
+        required: false
+        type: string
+        default: ""
+      fail_on_drift:
+        description: Fail apply when drift is detected immediately before apply
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      JWT_SECRET_KEY:
+        required: true
+      TERRAFORM_STATE_BUCKET:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  terraform-apply:
+    name: "Apply [${{ inputs.target_environment }}]"
+    runs-on: ubuntu-latest
+    concurrency:
+      group: terraform-state-${{ inputs.target_environment }}
+      cancel-in-progress: false
+    environment: ${{ inputs.github_environment != '' && inputs.github_environment || inputs.target_environment }}
+    env:
+      TF_ENV: ${{ inputs.target_environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Setup: init with remote backend (required to apply against real state) ──
+      - name: Terraform common setup
+        uses: ./.github/actions/terraform-setup-common
+        with:
+          target_environment: ${{ inputs.target_environment }}
+          operation: apply
+          aws_region: ${{ vars.AWS_REGION }}
+          terraform_state_bucket: ${{ secrets.TERRAFORM_STATE_BUCKET }}
+          terraform_plan_speculative: false
+          aws_auth_required: true
+          jwt_secret_key: ${{ secrets.JWT_SECRET_KEY }}
+          enable_security_checks: false
+          aws_oidc_role_arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role_session_name_prefix: gha-terraform-apply
+
+      - name: Detect Terraform var-file
+        id: vars
+        shell: bash
+        run: |
+          if [ -f "environments/${TF_ENV}/terraform.tfvars" ]; then
+            echo "var_file_arg=-var-file=terraform.tfvars" >> "$GITHUB_OUTPUT"
+          else
+            echo "var_file_arg=" >> "$GITHUB_OUTPUT"
+            echo "terraform.tfvars not found in environments/${TF_ENV}; running with defaults and other provided vars."
+          fi
+
+      - name: Capture current remote state version
+        id: state_version
+        shell: bash
+        run: |
+          STATE_KEY="${TF_ENV}/terraform.tfstate"
+          BUCKET="${{ secrets.TERRAFORM_STATE_BUCKET }}"
+          VERSION_ID=$(aws s3api list-object-versions \
+            --bucket "${BUCKET}" \
+            --prefix "${STATE_KEY}" \
+            --query "Versions[?IsLatest && Key=='${STATE_KEY}'].VersionId | [0]" \
+            --output text)
+
+          if [ -z "${VERSION_ID}" ] || [ "${VERSION_ID}" = "None" ]; then
+            echo "version_id=unknown" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not resolve latest S3 state version for ${STATE_KEY}."
+          else
+            echo "version_id=${VERSION_ID}" >> "$GITHUB_OUTPUT"
+            echo "Resolved pre-apply state version: ${VERSION_ID}"
+          fi
+
+      - name: Drift detection before apply
+        id: drift
+        shell: bash
+        run: |
+          PLAN_FILE="environments/${TF_ENV}/drift-pre-apply.txt"
+          PLAN_EXIT=0
+
+          terraform -chdir="environments/${TF_ENV}" plan \
+            -detailed-exitcode \
+            ${{ steps.vars.outputs.var_file_arg }} \
+            -lock-timeout=5m \
+            -no-color > "${PLAN_FILE}" 2>&1 || PLAN_EXIT=$?
+
+          cat "${PLAN_FILE}"
+          echo "drift_exit=${PLAN_EXIT}" >> "$GITHUB_OUTPUT"
+
+          if [ "${PLAN_EXIT}" -eq 1 ]; then
+            echo "::error::Terraform drift check errored before apply in ${TF_ENV}."
+            exit 1
+          fi
+
+      - name: Upload pre-apply drift artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-drift-pre-apply-${{ inputs.target_environment }}
+          path: environments/${{ inputs.target_environment }}/drift-pre-apply.txt
+          retention-days: 14
+
+      - name: Stop apply when drift exists
+        if: ${{ inputs.fail_on_drift && steps.drift.outputs.drift_exit == '2' }}
+        shell: bash
+        run: |
+          echo "::error::Drift detected in ${TF_ENV}. Aborting apply to protect promotion integrity."
+          exit 1
+
+      # ── Download saved plan artifact ──────────────────────────────────────────
+      - name: Download saved plan artifact (by ID)
+        if: ${{ inputs.saved_plan_artifact_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.saved_plan_artifact_id }}
+          merge-multiple: true
+          path: environments/${{ inputs.target_environment }}
+
+      - name: Download saved plan artifact (by name fallback)
+        if: ${{ inputs.saved_plan_artifact_id == '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.saved_plan_artifact_name }}
+          path: environments/${{ inputs.target_environment }}
+
+      - name: Verify saved plan file exists
+        shell: bash
+        run: |
+          [ -f "environments/${TF_ENV}/tfplan.binary" ] || {
+            echo "::error::Saved plan file not found at environments/${TF_ENV}/tfplan.binary" >&2
+            exit 1
+          }
+
+      # ── Apply ─────────────────────────────────────────────────────────────────
+      - name: Terraform apply
+        if: ${{ steps.drift.outputs.drift_exit != '1' && (steps.drift.outputs.drift_exit == '0' || !inputs.fail_on_drift) }}
+        shell: bash
+        run: |
+          terraform -chdir="environments/${TF_ENV}" apply \
+            -lock-timeout=5m \
+            -auto-approve \
+            -input=false \
+            "tfplan.binary"
+
+      # ── Summary ───────────────────────────────────────────────────────────────
+      - name: Workflow summary
+        if: always()
+        shell: bash
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "## Terraform Apply Summary"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Environment** | \`${TF_ENV}\` |"
+            echo "| **Plan artifact** | \`${{ inputs.saved_plan_artifact_name }}\` |"
+            echo "| **Plan artifact ID** | \`${{ inputs.saved_plan_artifact_id != '' && inputs.saved_plan_artifact_id || 'name fallback' }}\` |"
+            echo "| **Pre-apply drift check** | exit code ${{ steps.drift.outputs.drift_exit }} |"
+            echo "| **Pre-apply state version** | \`${{ steps.state_version.outputs.version_id }}\` |"
+            echo "| **Triggered by** | @${{ github.actor }} |"
+            echo "| **Commit** | [\`${GITHUB_SHA::8}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |"
+            echo "| **Run** | [#${{ github.run_number }}](${RUN_URL}) |"
+            echo "| **Status** | ${{ job.status }} |"
+            echo ""
+            echo "### Rollback (if required)"
+            echo "1. Identify the pre-apply state version from the table above."
+            echo "2. Restore it in S3:"
+            echo "   aws s3api copy-object --bucket ${{ secrets.TERRAFORM_STATE_BUCKET }} --copy-source ${{ secrets.TERRAFORM_STATE_BUCKET }}/${TF_ENV}/terraform.tfstate?versionId=${{ steps.state_version.outputs.version_id }} --key ${TF_ENV}/terraform.tfstate"
+            echo "3. Re-run plan and apply to reconcile infrastructure safely."
+          } >> "$GITHUB_STEP_SUMMARY"
