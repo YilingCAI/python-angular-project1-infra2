@@ -161,6 +161,45 @@ runs:
       shell: bash
       run: echo "TF_VAR_jwt_secret_key=${{ inputs.jwt_secret_key }}" >> "$GITHUB_ENV"
 
+    - name: Ensure kubeconfig exists for providers
+      shell: bash
+      run: |
+        ENV_DIR="environments/${{ inputs.target_environment }}"
+
+        KUBECONFIG_PATH=$(awk -F '=' '/^kubeconfig_path[[:space:]]*=/{gsub(/"/, "", $2); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' "${ENV_DIR}/terraform.tfvars" | tail -n 1)
+        KUBECONFIG_CONTEXT=$(awk -F '=' '/^kubeconfig_context[[:space:]]*=/{gsub(/"/, "", $2); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' "${ENV_DIR}/terraform.tfvars" | tail -n 1)
+
+        if [ -z "$KUBECONFIG_PATH" ]; then
+          KUBECONFIG_PATH="$HOME/.kube/config"
+        fi
+
+        KUBECONFIG_PATH="${KUBECONFIG_PATH/#\~/$HOME}"
+
+        mkdir -p "$(dirname "$KUBECONFIG_PATH")"
+
+        if [ ! -f "$KUBECONFIG_PATH" ]; then
+          DUMMY_CONTEXT="${KUBECONFIG_CONTEXT:-ci-context}"
+          cat > "$KUBECONFIG_PATH" <<EOF
+        apiVersion: v1
+        kind: Config
+        clusters:
+        - name: ci-cluster
+          cluster:
+            server: https://127.0.0.1
+            insecure-skip-tls-verify: true
+        contexts:
+        - name: ${DUMMY_CONTEXT}
+          context:
+            cluster: ci-cluster
+            user: ci-user
+        current-context: ${DUMMY_CONTEXT}
+        users:
+        - name: ci-user
+          user:
+            token: ci-token
+        EOF
+        fi
+
     - name: Render backend config
       if: ${{ inputs.terraform_plan_speculative != 'true' }}
       shell: bash
