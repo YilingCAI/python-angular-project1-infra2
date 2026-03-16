@@ -33,36 +33,33 @@ resource "helm_release" "aws_load_balancer_controller" {
   cleanup_on_fail  = true
   timeout          = 600
 
-  set {
-    name  = "clusterName"
-    value = var.cluster_name
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = "aws-load-balancer-controller"
-  }
-
-  # Bind the service account to the IRSA role so the controller can manage ALBs
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.alb_controller_role_arn
-  }
-
-  set {
-    name  = "vpcId"
-    value = var.vpc_id
-  }
-
-  set {
-    name  = "region"
-    value = var.aws_region
-  }
+  set = [
+    {
+      name  = "clusterName"
+      value = var.cluster_name
+    },
+    {
+      name  = "serviceAccount.create"
+      value = "true"
+    },
+    {
+      name  = "serviceAccount.name"
+      value = "aws-load-balancer-controller"
+    },
+    # Bind the service account to the IRSA role so the controller can manage ALBs
+    {
+      name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+      value = var.alb_controller_role_arn
+    },
+    {
+      name  = "vpcId"
+      value = var.vpc_id
+    },
+    {
+      name  = "region"
+      value = var.aws_region
+    }
+  ]
 }
 
 # ─── Cluster Autoscaler ──────────────────────────────────────────────────────
@@ -77,40 +74,36 @@ resource "helm_release" "cluster_autoscaler" {
   cleanup_on_fail  = true
   timeout          = 300
 
-  set {
-    name  = "autoDiscovery.clusterName"
-    value = var.cluster_name
-  }
-
-  set {
-    name  = "awsRegion"
-    value = var.aws_region
-  }
-
-  set {
-    name  = "rbac.serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "rbac.serviceAccount.name"
-    value = "cluster-autoscaler"
-  }
-
-  set {
-    name  = "rbac.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.cluster_autoscaler_role_arn
-  }
-
-  set {
-    name  = "extraArgs.balance-similar-node-groups"
-    value = "true"
-  }
-
-  set {
-    name  = "extraArgs.skip-nodes-with-system-pods"
-    value = "false"
-  }
+  set = [
+    {
+      name  = "autoDiscovery.clusterName"
+      value = var.cluster_name
+    },
+    {
+      name  = "awsRegion"
+      value = var.aws_region
+    },
+    {
+      name  = "rbac.serviceAccount.create"
+      value = "true"
+    },
+    {
+      name  = "rbac.serviceAccount.name"
+      value = "cluster-autoscaler"
+    },
+    {
+      name  = "rbac.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+      value = var.cluster_autoscaler_role_arn
+    },
+    {
+      name  = "extraArgs.balance-similar-node-groups"
+      value = "true"
+    },
+    {
+      name  = "extraArgs.skip-nodes-with-system-pods"
+      value = "false"
+    }
+  ]
 }
 
 # ─── Secrets Store CSI Driver ────────────────────────────────────────────────
@@ -125,20 +118,20 @@ resource "helm_release" "secrets_store_csi" {
   cleanup_on_fail  = true
   timeout          = 300
 
-  set {
-    name  = "syncSecret.enabled"
-    value = "true"
-  }
-
-  set {
-    name  = "enableSecretRotation"
-    value = "true"
-  }
-
-  set {
-    name  = "rotationPollInterval"
-    value = "3600s"
-  }
+  set = [
+    {
+      name  = "syncSecret.enabled"
+      value = "true"
+    },
+    {
+      name  = "enableSecretRotation"
+      value = "true"
+    },
+    {
+      name  = "rotationPollInterval"
+      value = "3600s"
+    }
+  ]
 }
 
 # ─── AWS Secrets Manager Provider for Secrets Store CSI ─────────────────────
