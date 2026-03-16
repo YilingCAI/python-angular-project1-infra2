@@ -1,0 +1,82 @@
+name: Terraform Drift Detection
+
+# Runs a drift-detection plan against each environment's live state.
+# Schedule: nightly at 02:30 UTC — all environments.
+# Manual: choose a specific environment or all.
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [dev, staging, prod, all]
+        default: all
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+# Each run gets a unique concurrency key so scheduled runs never cancel each other.
+concurrency:
+  group: terraform-drift-${{ github.event.inputs.environment || 'all' }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  drift-dev:
+    name: Drift – dev
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.environment == 'dev' || inputs.environment == 'all'))
+    uses: ./.github/workflows/terraform-plan-reusable.yml
+    with:
+      target_environment: dev
+      github_environment: dev
+      speculative: false
+      drift: true
+      fail_on_drift: true
+      enable_security_checks: false
+      enable_pr_comment: false
+    secrets: inherit
+
+  drift-staging:
+    name: Drift – staging
+    needs: [drift-dev]
+    if: >-
+      always() && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && (inputs.environment == 'staging' || inputs.environment == 'all'))
+      )
+    uses: ./.github/workflows/terraform-plan-reusable.yml
+    with:
+      target_environment: staging
+      github_environment: staging
+      speculative: false
+      drift: true
+      fail_on_drift: true
+      enable_security_checks: false
+      enable_pr_comment: false
+    secrets: inherit
+
+  drift-prod:
+    name: Drift – prod
+    needs: [drift-staging]
+    if: >-
+      always() && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && (inputs.environment == 'prod' || inputs.environment == 'all'))
+      )
+    uses: ./.github/workflows/terraform-plan-reusable.yml
+    with:
+      target_environment: prod
+      github_environment: prod
+      speculative: false
+      drift: true
+      fail_on_drift: true
+      enable_security_checks: false
+      enable_pr_comment: false
+    secrets: inherit
