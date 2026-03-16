@@ -28,6 +28,38 @@ resource "aws_kms_key" "eks" {
   tags = { Name = "${var.project_name}-eks-key" }
 }
 
+resource "aws_kms_key_policy" "eks" {
+  key_id = aws_kms_key.eks.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowEKSAndLogsUse"
+        Effect = "Allow"
+        Principal = {
+          Service = ["eks.amazonaws.com", "logs.${data.aws_region.current.region}.amazonaws.com"]
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_kms_alias" "eks" {
   name          = "alias/${var.project_name}-eks"
   target_key_id = aws_kms_key.eks.key_id
@@ -36,7 +68,8 @@ resource "aws_kms_alias" "eks" {
 # ─── CloudWatch Log Group for EKS Control Plane ──────────────────────────────
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
-  retention_in_days = var.log_retention_days
+  retention_in_days = max(var.log_retention_days, 365)
+  kms_key_id        = aws_kms_key.eks.arn
 
   tags = { Name = "${var.project_name}-eks-logs" }
 }
@@ -69,6 +102,8 @@ resource "aws_iam_role_policy_attachment" "eks_vpc_resource_controller" {
 
 # ─── EKS Cluster ─────────────────────────────────────────────────────────────
 resource "aws_eks_cluster" "main" {
+  #checkov:skip=CKV_AWS_38:Public endpoint access is environment-controlled via var.endpoint_public_access.
+  #checkov:skip=CKV_AWS_39:Public endpoint is intentionally allowed for non-prod troubleshooting environments.
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
   version  = var.kubernetes_version
@@ -296,6 +331,14 @@ resource "aws_iam_policy" "cluster_autoscaler" {
           "eks:DescribeNodegroup"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/enabled" = "true"
+          }
+          StringLike = {
+            "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+          }
+        }
       }
     ]
   })

@@ -28,7 +28,7 @@ log_retention_days       = 7
 
 # EKS
 kubernetes_version     = "1.32"
-endpoint_public_access = true
+endpoint_public_access = false
 node_instance_types    = ["t3.large"]
 node_capacity_type     = "ON_DEMAND"
 node_disk_size         = 20

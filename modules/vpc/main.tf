@@ -32,7 +32,8 @@ resource "aws_default_security_group" "default" {
 # VPC Flow Logs (CKV2_AWS_11)
 resource "aws_cloudwatch_log_group" "flow_logs" {
   name              = "/aws/vpc/flowlogs/${var.project_name}"
-  retention_in_days = 30
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.flow_logs.arn
 
   tags = { Name = "${var.project_name}-vpc-flow-logs" }
 }
@@ -43,6 +44,40 @@ resource "aws_kms_key" "flow_logs" {
   enable_key_rotation     = true
 
   tags = { Name = "${var.project_name}-flow-logs-key" }
+}
+
+resource "aws_kms_key_policy" "flow_logs" {
+  key_id = aws_kms_key.flow_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudWatchLogsUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role" "flow_logs" {
@@ -69,8 +104,11 @@ resource "aws_iam_role_policy" "flow_logs" {
         "logs:CreateLogGroup", "logs:CreateLogStream",
         "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"
       ]
-      Effect   = "Allow"
-      Resource = "*"
+      Effect = "Allow"
+      Resource = [
+        aws_cloudwatch_log_group.flow_logs.arn,
+        "${aws_cloudwatch_log_group.flow_logs.arn}:*"
+      ]
     }]
   })
 }
@@ -193,6 +231,9 @@ resource "aws_route_table_association" "private" {
 # ─── Security Groups ────────────────────────────────────────────────────────
 
 # ALB Security Group
+#checkov:skip=CKV_AWS_260:Port 80 is required for HTTP-to-HTTPS redirect.
+#checkov:skip=CKV_AWS_382:ALB requires outbound connectivity to targets.
+#checkov:skip=CKV2_AWS_5:Security group is attached by consuming modules (ALB resource).
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg"
   description = "ALB security group"
@@ -226,6 +267,8 @@ resource "aws_security_group" "alb" {
 }
 
 # EKS Node Security Group — allows ALB → nodes and node → node
+#checkov:skip=CKV_AWS_382:Egress to internet is required for node bootstrap, image pulls, and updates.
+#checkov:skip=CKV2_AWS_5:Security group is attached by consuming modules (EKS cluster/node groups).
 resource "aws_security_group" "eks_nodes" {
   name        = "${var.project_name}-eks-nodes-sg"
   description = "EKS node security group"
@@ -262,6 +305,8 @@ resource "aws_security_group" "eks_nodes" {
 }
 
 # RDS Security Group
+#checkov:skip=CKV_AWS_382:RDS SG egress is not used for ingress control and is acceptable for managed service operations.
+#checkov:skip=CKV2_AWS_5:Security group is attached by consuming modules (RDS instance).
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
   description = "RDS security group — allows PostgreSQL from EKS nodes"
