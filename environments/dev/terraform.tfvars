@@ -4,7 +4,7 @@ aws_region   = "us-east-1"
 
 # Kubeconfig — run: aws eks update-kubeconfig --name mypythonproject1-dev-eks --region us-east-1
 kubeconfig_path    = "~/.kube/config"
-kubeconfig_context = "arn:aws:eks:us-east-1:388252587928:cluster/mypythonproject1-dev-eks"
+kubeconfig_context = "arn:aws:eks:us-east-1:769254791061:cluster/mypythonproject1-dev-eks"
 
 # Networking
 vpc_cidr              = "10.0.0.0/16"
