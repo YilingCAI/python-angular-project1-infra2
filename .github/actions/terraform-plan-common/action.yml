@@ -76,6 +76,51 @@ runs:
           -json \
           "plan.tfplan" > "environments/${{ inputs.target_environment }}/plan.json"
 
+    # ── First-deploy EKS bootstrap ────────────────────────────────────────────
+    # On the very first run the EKS cluster does not exist yet, so
+    # `data "aws_eks_cluster" "main"` in providers.tf fails during plan.
+    # This step detects that and performs a targeted apply for module.eks
+    # (Terraform automatically includes its dependency graph: network, ALB,
+    # RDS, KMS, Secrets Manager) so the kubernetes/helm providers can connect
+    # for the subsequent full plan.
+    - name: Bootstrap EKS cluster if missing (first deploy)
+      if: ${{ inputs.speculative_plan != 'true' && inputs.drift_plan != 'true' }}
+      shell: bash
+      run: |
+        ENV_DIR="environments/${{ inputs.target_environment }}"
+
+        PROJECT_NAME=$(awk -F '=' '/^project_name[[:space:]]*=/{gsub(/"/, "", $2); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' \
+          "${ENV_DIR}/terraform.tfvars" 2>/dev/null | tail -n 1)
+        AWS_REGION=$(awk -F '=' '/^aws_region[[:space:]]*=/{gsub(/"/, "", $2); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}' \
+          "${ENV_DIR}/terraform.tfvars" 2>/dev/null | tail -n 1)
+        AWS_REGION="${AWS_REGION:-us-east-1}"
+        CLUSTER_NAME="${PROJECT_NAME}-eks"
+
+        if [ -z "${PROJECT_NAME}" ]; then
+          echo "::warning::Could not parse project_name from tfvars; skipping EKS bootstrap check."
+          exit 0
+        fi
+
+        echo "Checking if EKS cluster '${CLUSTER_NAME}' exists in '${AWS_REGION}'..."
+        if aws eks describe-cluster \
+            --name "${CLUSTER_NAME}" \
+            --region "${AWS_REGION}" \
+            --query "cluster.status" \
+            --output text >/dev/null 2>&1; then
+          echo "EKS cluster '${CLUSTER_NAME}' already exists — no bootstrap needed."
+          exit 0
+        fi
+
+        echo "::notice::EKS cluster '${CLUSTER_NAME}' not found. Bootstrapping with -target=module.eks before full plan."
+        terraform -chdir="${ENV_DIR}" apply \
+          ${{ steps.vars.outputs.var_file_arg }} \
+          -target=module.eks \
+          -auto-approve \
+          -input=false \
+          -lock-timeout=10m \
+          -no-color 2>&1 | tee "${ENV_DIR}/eks-bootstrap-output.txt"
+        echo "EKS bootstrap complete."
+
     - name: Terraform plan (real – saves artifact for apply)
       if: ${{ inputs.speculative_plan != 'true' && inputs.drift_plan != 'true' }}
       shell: bash
