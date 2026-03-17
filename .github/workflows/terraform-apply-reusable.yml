@@ -118,7 +118,6 @@ jobs:
         run: |
           PLAN_FILE="environments/${TF_ENV}/drift-pre-apply.txt"
           PLAN_EXIT=0
-          TAINT_REPLACEMENT=false
 
           if [ "${{ steps.state_version.outputs.state_exists }}" != "true" ]; then
             echo "No remote state exists yet; skipping drift detection for initial deployment." | tee "${PLAN_FILE}"
@@ -134,14 +133,7 @@ jobs:
             -no-color > "${PLAN_FILE}" 2>&1 || PLAN_EXIT=$?
 
           cat "${PLAN_FILE}"
-
-          if [ "${PLAN_EXIT}" -eq 2 ] && grep -q "is tainted, so must be replaced" "${PLAN_FILE}"; then
-            TAINT_REPLACEMENT=true
-            echo "::warning::Detected tainted resource replacement in drift check for ${TF_ENV}."
-          fi
-
           echo "drift_exit=${PLAN_EXIT}" >> "$GITHUB_OUTPUT"
-          echo "taint_replacement=${TAINT_REPLACEMENT}" >> "$GITHUB_OUTPUT"
 
           if [ "${PLAN_EXIT}" -eq 1 ]; then
             echo "::error::Terraform drift check errored before apply in ${TF_ENV}."
@@ -162,12 +154,6 @@ jobs:
         run: |
           echo "::error::Drift detected in ${TF_ENV}. Aborting apply to protect promotion integrity."
           exit 1
-
-      - name: Allow dev apply when drift exists
-        if: ${{ inputs.target_environment == 'dev' && steps.drift.outputs.drift_exit == '2' }}
-        shell: bash
-        run: |
-          echo "::warning::Proceeding with dev apply despite drift output. Drift blocking remains enforced for staging/prod."
 
       # ── Download saved plan artifact ──────────────────────────────────────────
       - name: Download saved plan artifact (by ID)
@@ -223,20 +209,81 @@ jobs:
 
           echo "stale=${STALE}" >> "$GITHUB_OUTPUT"
 
-      - name: Fail on stale saved plan (staging/prod)
-        if: ${{ inputs.target_environment != 'dev' && steps.plan_freshness.outputs.stale == 'true' }}
+      # ── Taint detection ───────────────────────────────────────────────────────
+      # Read the saved plan binary (already downloaded) and identify any resources
+      # whose action_reason is "replace_because_tainted". These require untaint
+      # before applying — otherwise Terraform will destroy a live resource.
+      - name: Detect tainted resources in saved plan
+        id: taint_check
         shell: bash
         run: |
-          echo "::error::Saved plan is stale for ${TF_ENV}. Re-run plan before apply."
-          echo "::error::Plan state version: ${{ steps.plan_meta.outputs.plan_state_version }}"
-          echo "::error::Current state version: ${{ steps.state_version.outputs.version_id }}"
+          PLAN_BINARY="environments/${TF_ENV}/tfplan.binary"
+          if [ ! -f "${PLAN_BINARY}" ]; then
+            echo "has_tainted=false" >> "$GITHUB_OUTPUT"
+            echo "tainted_list=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TAINTED=$(terraform -chdir="environments/${TF_ENV}" show -json tfplan.binary 2>/dev/null \
+            | jq -r '[.resource_changes[]
+                | select(.action_reason == "replace_because_tainted")
+                | .address] | join(" ")' 2>/dev/null || echo "")
+
+          if [ -n "${TAINTED}" ]; then
+            echo "::warning::Tainted resources found in saved plan: ${TAINTED}"
+            echo "has_tainted=true" >> "$GITHUB_OUTPUT"
+            echo "tainted_list=${TAINTED}" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tainted=false" >> "$GITHUB_OUTPUT"
+            echo "tainted_list=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Staging/prod gate: block on stale plan OR tainted resources ───────────
+      - name: Block apply — stale plan or tainted resources (staging/prod)
+        if: >-
+          ${{ inputs.target_environment != 'dev' &&
+              (steps.plan_freshness.outputs.stale == 'true' ||
+               steps.taint_check.outputs.has_tainted == 'true') }}
+        shell: bash
+        run: |
+          if [ "${{ steps.plan_freshness.outputs.stale }}" == "true" ]; then
+            echo "::error::Saved plan is stale for ${TF_ENV}."
+            echo "::error::  Plan state version   : ${{ steps.plan_meta.outputs.plan_state_version }}"
+            echo "::error::  Current state version: ${{ steps.state_version.outputs.version_id }}"
+            echo "::error::Action: re-run the plan workflow, obtain a new approval, then apply."
+          fi
+          if [ "${{ steps.taint_check.outputs.has_tainted }}" == "true" ]; then
+            echo "::error::Tainted resources found in saved plan for ${TF_ENV}."
+            echo "::error::Applying this plan would destroy and recreate:"
+            for addr in ${{ steps.taint_check.outputs.tainted_list }}; do
+              echo "::error::  - ${addr}"
+            done
+            echo "::error::Action: trigger the 'Terraform Untaint' workflow_dispatch for ${TF_ENV},"
+            echo "::error::specifying the resource addresses above, then re-run the plan + apply."
+          fi
           exit 1
 
-      - name: Rebuild plan in dev when saved plan is stale
-        if: ${{ inputs.target_environment == 'dev' && steps.plan_freshness.outputs.stale == 'true' }}
+      # ── Dev auto-fix: untaint + rebuild plan when stale or tainted ────────────
+      - name: Auto-fix in dev — untaint and rebuild plan
+        if: >-
+          ${{ inputs.target_environment == 'dev' &&
+              (steps.plan_freshness.outputs.stale == 'true' ||
+               steps.taint_check.outputs.has_tainted == 'true') }}
         shell: bash
         run: |
-          echo "::warning::Saved plan is stale for dev. Regenerating tfplan.binary from latest state."
+          if [ "${{ steps.taint_check.outputs.has_tainted }}" == "true" ]; then
+            echo "::warning::Auto-untainting tainted resources in dev before apply."
+            for addr in ${{ steps.taint_check.outputs.tainted_list }}; do
+              echo "  Untainting: ${addr}"
+              terraform -chdir="environments/${TF_ENV}" untaint "${addr}"
+            done
+          fi
+
+          if [ "${{ steps.plan_freshness.outputs.stale }}" == "true" ]; then
+            echo "::warning::Saved plan is stale in dev — rebuilding against current state."
+          fi
+
+          echo "Regenerating plan..."
           terraform -chdir="environments/${TF_ENV}" plan \
             ${{ steps.vars.outputs.var_file_arg }} \
             -lock-timeout=5m \
@@ -253,7 +300,7 @@ jobs:
 
       # ── Apply ─────────────────────────────────────────────────────────────────
       - name: Terraform apply
-        if: ${{ steps.drift.outputs.drift_exit != '1' && (steps.drift.outputs.drift_exit == '0' || !inputs.fail_on_drift || (inputs.target_environment == 'dev' && steps.drift.outputs.drift_exit == '2')) }}
+        if: ${{ steps.drift.outputs.drift_exit != '1' }}
         shell: bash
         run: |
           terraform -chdir="environments/${TF_ENV}" apply \
@@ -279,6 +326,7 @@ jobs:
             echo "| **Plan metadata present** | \`${{ steps.plan_meta.outputs.metadata_present }}\` |"
             echo "| **Plan state version** | \`${{ steps.plan_meta.outputs.plan_state_version }}\` |"
             echo "| **Saved plan stale** | \`${{ steps.plan_freshness.outputs.stale }}\` |"
+            echo "| **Tainted resources in plan** | \`${{ steps.taint_check.outputs.has_tainted }}\` — ${{ steps.taint_check.outputs.tainted_list != '' && steps.taint_check.outputs.tainted_list || 'none' }} |"
             echo "| **Pre-apply drift check** | exit code ${{ steps.drift.outputs.drift_exit }} |"
             echo "| **Pre-apply state version** | \`${{ steps.state_version.outputs.version_id }}\` |"
             echo "| **Triggered by** | @${{ github.actor }} |"

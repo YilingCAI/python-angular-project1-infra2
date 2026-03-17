@@ -60,6 +60,8 @@ on:
         required: true
       TERRAFORM_STATE_BUCKET:
         required: false
+      AWS_OIDC_ROLE_ARN:
+        required: false
       INFRACOST_API_KEY:
         required: false
     outputs:
@@ -77,8 +79,12 @@ jobs:
     name: "Plan [${{ inputs.target_environment }}]${{ inputs.drift && ' (drift)' || inputs.speculative && ' (speculative)' || '' }}"
     runs-on: ubuntu-latest
     concurrency:
-      group: terraform-state-${{ inputs.target_environment }}
-      cancel-in-progress: false
+      # Speculative plans use their own concurrency group per-ref so they can run
+      # in parallel with real applies and cancel each other on new commits.
+      # Real plans and drift use the shared state-lock group (cancel-in-progress: false)
+      # to prevent two writes competing for the same S3 state object.
+      group: ${{ inputs.speculative && format('terraform-speculative-{0}-{1}', inputs.target_environment, github.ref) || format('terraform-state-{0}', inputs.target_environment) }}
+      cancel-in-progress: ${{ inputs.speculative }}
     environment: ${{ inputs.github_environment != '' && inputs.github_environment || inputs.target_environment }}
     env:
       TF_ENV: ${{ inputs.target_environment }}
