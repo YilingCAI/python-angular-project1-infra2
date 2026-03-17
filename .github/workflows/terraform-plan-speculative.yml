@@ -20,6 +20,8 @@ on:
       - '**/*.tf'
       - '**/*.tfvars'
       - '**/.terraform.lock.hcl'
+      - '.github/workflows/**'
+      - '.github/actions/**'
       - '!bootstrap/**'
   workflow_dispatch:
     inputs:
