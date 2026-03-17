@@ -57,6 +57,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Terraform common setup
+        uses: ./.github/actions/terraform-setup-common
+        with:
+          target_environment: ${{ inputs.target_environment }}
+          operation: apply
+          aws_region: ${{ vars.AWS_REGION }}
+          terraform_state_bucket: ${{ secrets.TERRAFORM_STATE_BUCKET }}
+          terraform_plan_speculative: false
+          aws_auth_required: true
+          jwt_secret_key: ${{ secrets.JWT_SECRET_KEY }}
+          enable_security_checks: false
+          checkov_enforcement: advisory
+          aws_oidc_role_arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role_session_name_prefix: gha-terraform-apply
+
       - name: Detect Terraform var-file
         id: vars
         shell: bash
