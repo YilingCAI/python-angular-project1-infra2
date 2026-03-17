@@ -313,7 +313,7 @@ resource "aws_security_group" "eks_nodes" {
 #checkov:skip=CKV2_AWS_5:Security group is attached by consuming modules (RDS instance).
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
-  description = "RDS security group — allows PostgreSQL from EKS nodes"
+  description = "RDS security group - allows PostgreSQL from EKS nodes"
   vpc_id      = aws_vpc.main.id
 
   ingress {
