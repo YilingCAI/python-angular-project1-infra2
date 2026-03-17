@@ -1,6 +1,6 @@
 aws_region          = "us-east-1"
 project_name        = "mypythonproject1"
-expected_account_id = "769254791061"
+expected_account_id = "730335510642"
 
 environments = ["dev", "staging", "prod"]
 
