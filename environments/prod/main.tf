@@ -89,6 +89,8 @@ module "alb" {
   certificate_arn       = var.certificate_arn
   enforce_https_only    = var.alb_enforce_https_only
   web_acl_arn           = var.alb_web_acl_arn
+
+  depends_on = [module.network]
 }
 
 # JWT Secret in Secrets Manager (referenced by EKS pods via IRSA)
