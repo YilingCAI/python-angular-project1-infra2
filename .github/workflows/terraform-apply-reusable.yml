@@ -126,6 +126,7 @@ jobs:
           fi
 
           terraform -chdir="environments/${TF_ENV}" plan \
+            -refresh-only \
             -detailed-exitcode \
             ${{ steps.vars.outputs.var_file_arg }} \
             -lock-timeout=5m \
