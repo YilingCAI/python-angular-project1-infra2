@@ -2,10 +2,6 @@ environment  = "prod"
 project_name = "mypythonproject1-prod"
 aws_region   = "us-east-1"
 
-# Kubeconfig — run: aws eks update-kubeconfig --name mypythonproject1-prod-eks --region us-east-1
-kubeconfig_path    = "~/.kube/config"
-kubeconfig_context = "arn:aws:eks:us-east-1:372212891811:cluster/mypythonproject1-prod-eks"
-
 # Networking
 vpc_cidr              = "10.2.0.0/16"
 availability_zones    = ["us-east-1a", "us-east-1b", "us-east-1c"]
