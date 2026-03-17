@@ -84,7 +84,13 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
   restrict_public_buckets = true
 }
 
-# Bucket policy for ALB to write logs with encryption enforcement
+# Bucket policy for ALB to write logs
+# delivery.logs.amazonaws.com requires:
+#   - s3:GetBucketAcl  (ownership check before writing)
+#   - s3:PutObject     (the actual log write)
+# The s3:x-amz-acl condition is intentionally omitted: new S3 buckets default to
+# BucketOwnerEnforced which disables ACLs entirely, causing any request with an
+# x-amz-acl header to fail. Without the condition, log delivery works correctly.
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
 
@@ -92,24 +98,39 @@ resource "aws_s3_bucket_policy" "alb_logs" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AWSELBServiceAccountWrite"
         Effect = "Allow"
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
       },
       {
-        Sid    = "AllowALBLogDelivery"
+        Sid    = "AWSLogDeliveryAclCheck"
         Effect = "Allow"
         Principal = {
-          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+          Service = "delivery.logs.amazonaws.com"
         }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/*"
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
           }
         }
       }
