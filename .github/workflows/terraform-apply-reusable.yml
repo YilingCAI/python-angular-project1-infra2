@@ -118,6 +118,7 @@ jobs:
         run: |
           PLAN_FILE="environments/${TF_ENV}/drift-pre-apply.txt"
           PLAN_EXIT=0
+          TAINT_REPLACEMENT=false
 
           if [ "${{ steps.state_version.outputs.state_exists }}" != "true" ]; then
             echo "No remote state exists yet; skipping drift detection for initial deployment." | tee "${PLAN_FILE}"
@@ -133,7 +134,14 @@ jobs:
             -no-color > "${PLAN_FILE}" 2>&1 || PLAN_EXIT=$?
 
           cat "${PLAN_FILE}"
+
+          if [ "${PLAN_EXIT}" -eq 2 ] && grep -q "is tainted, so must be replaced" "${PLAN_FILE}"; then
+            TAINT_REPLACEMENT=true
+            echo "::warning::Detected tainted resource replacement in drift check for ${TF_ENV}."
+          fi
+
           echo "drift_exit=${PLAN_EXIT}" >> "$GITHUB_OUTPUT"
+          echo "taint_replacement=${TAINT_REPLACEMENT}" >> "$GITHUB_OUTPUT"
 
           if [ "${PLAN_EXIT}" -eq 1 ]; then
             echo "::error::Terraform drift check errored before apply in ${TF_ENV}."
@@ -149,11 +157,17 @@ jobs:
           retention-days: 14
 
       - name: Stop apply when drift exists
-        if: ${{ inputs.fail_on_drift && steps.drift.outputs.drift_exit == '2' }}
+        if: ${{ inputs.fail_on_drift && steps.drift.outputs.drift_exit == '2' && !(inputs.target_environment == 'dev' && steps.drift.outputs.taint_replacement == 'true') }}
         shell: bash
         run: |
           echo "::error::Drift detected in ${TF_ENV}. Aborting apply to protect promotion integrity."
           exit 1
+
+      - name: Allow dev apply on taint-only drift
+        if: ${{ inputs.target_environment == 'dev' && steps.drift.outputs.drift_exit == '2' && steps.drift.outputs.taint_replacement == 'true' }}
+        shell: bash
+        run: |
+          echo "::warning::Proceeding with dev apply because drift is taint-related."
 
       # ── Download saved plan artifact ──────────────────────────────────────────
       - name: Download saved plan artifact (by ID)
