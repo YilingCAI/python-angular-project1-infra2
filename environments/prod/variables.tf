@@ -229,19 +229,6 @@ variable "log_retention_days" {
   default     = 7
 }
 
-# ─── Kubeconfig ───────────────────────────────────────────────────────────────
-variable "kubeconfig_path" {
-  description = "Path to the kubeconfig file used by the kubernetes and helm providers"
-  type        = string
-  default     = "~/.kube/config"
-}
-
-variable "kubeconfig_context" {
-  description = "kubeconfig context to use (leave empty to use the current context)"
-  type        = string
-  default     = ""
-}
-
 # ─── Helm System Add-ons ──────────────────────────────────────────────────────────
 
 variable "alb_controller_chart_version" {
