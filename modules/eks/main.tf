@@ -44,10 +44,10 @@ resource "aws_kms_key_policy" "eks" {
         Resource = "*"
       },
       {
-        Sid    = "AllowEKSAndLogsUse"
+        Sid    = "AllowEKSUse"
         Effect = "Allow"
         Principal = {
-          Service = ["eks.amazonaws.com", "logs.${data.aws_region.current.region}.amazonaws.com"]
+          Service = "eks.amazonaws.com"
         }
         Action = [
           "kms:Decrypt",
@@ -69,7 +69,8 @@ resource "aws_kms_alias" "eks" {
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = max(var.log_retention_days, 365)
-  kms_key_id        = aws_kms_key.eks.arn
+  # Default CloudWatch SSE is sufficient for control plane logs.
+  # The CMK is reserved for EKS secrets envelope encryption (cluster resource below).
 
   tags = { Name = "${var.project_name}-eks-logs" }
 }
