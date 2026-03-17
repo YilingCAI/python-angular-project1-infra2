@@ -26,63 +26,17 @@ resource "aws_s3_bucket_versioning" "alb_logs" {
   }
 }
 
-# Enable server-side encryption with KMS (CKV_AWS_27, CKV_AWS_145)
-resource "aws_kms_key" "alb_logs" {
-  description             = "KMS key for ALB logs bucket"
-  deletion_window_in_days = 10
-  enable_key_rotation     = true
-
-  tags = {
-    Name = "${var.project_name}-alb-logs-key"
-  }
-}
-
-resource "aws_kms_key_policy" "alb_logs" {
-  key_id = aws_kms_key.alb_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "AllowS3UseOfKey"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_kms_alias" "alb_logs" {
-  name          = "alias/${var.project_name}-alb-logs"
-  target_key_id = aws_kms_key.alb_logs.key_id
-}
-
+# Enable server-side encryption with AES-256 (CKV_AWS_145)
+# Note: ALB access logs do NOT support SSE-KMS — only AES256 is supported by the
+# ELB log-delivery service. Using KMS here causes "Access Denied" on ModifyLoadBalancerAttributes.
+#checkov:skip=CKV2_AWS_145:ALB access log delivery requires AES256; SSE-KMS is unsupported by AWS ELB log delivery.
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.alb_logs.arn
+      sse_algorithm = "AES256"
     }
-    bucket_key_enabled = true
   }
 }
 
