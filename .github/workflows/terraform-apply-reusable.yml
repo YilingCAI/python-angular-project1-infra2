@@ -55,7 +55,7 @@ jobs:
       TF_ENV: ${{ inputs.target_environment }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ── Setup: init with remote backend (required to apply against real state) ──
       - name: Terraform common setup
@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload pre-apply drift artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terraform-drift-pre-apply-${{ inputs.target_environment }}
           path: environments/${{ inputs.target_environment }}/drift-pre-apply.txt
@@ -142,7 +142,7 @@ jobs:
       # ── Download saved plan artifact ──────────────────────────────────────────
       - name: Download saved plan artifact (by ID)
         if: ${{ inputs.saved_plan_artifact_id != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           artifact-ids: ${{ inputs.saved_plan_artifact_id }}
           merge-multiple: true
@@ -150,7 +150,7 @@ jobs:
 
       - name: Download saved plan artifact (by name fallback)
         if: ${{ inputs.saved_plan_artifact_id == '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.saved_plan_artifact_name }}
           path: environments/${{ inputs.target_environment }}
