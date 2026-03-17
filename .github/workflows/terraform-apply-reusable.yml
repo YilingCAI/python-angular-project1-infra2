@@ -57,21 +57,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Setup: init with remote backend (required to apply against real state) ──
-      - name: Terraform common setup
-        uses: ./.github/actions/terraform-setup-common
-        with:
-          target_environment: ${{ inputs.target_environment }}
-          operation: apply
-          aws_region: ${{ vars.AWS_REGION }}
-          terraform_state_bucket: ${{ secrets.TERRAFORM_STATE_BUCKET }}
-          terraform_plan_speculative: false
-          aws_auth_required: true
-          jwt_secret_key: ${{ secrets.JWT_SECRET_KEY }}
-          enable_security_checks: false
-          aws_oidc_role_arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          role_session_name_prefix: gha-terraform-apply
-
       - name: Detect Terraform var-file
         id: vars
         shell: bash
@@ -89,6 +74,15 @@ jobs:
         run: |
           STATE_KEY="${TF_ENV}/terraform.tfstate"
           BUCKET="${{ secrets.TERRAFORM_STATE_BUCKET }}"
+
+          if ! aws s3api head-object --bucket "${BUCKET}" --key "${STATE_KEY}" >/dev/null 2>&1; then
+            echo "state_exists=false" >> "$GITHUB_OUTPUT"
+            echo "version_id=none" >> "$GITHUB_OUTPUT"
+            echo "No remote state object found for ${STATE_KEY}. Treating this as first deployment."
+            exit 0
+          fi
+
+          echo "state_exists=true" >> "$GITHUB_OUTPUT"
           VERSION_ID=$(aws s3api list-object-versions \
             --bucket "${BUCKET}" \
             --prefix "${STATE_KEY}" \
@@ -109,6 +103,12 @@ jobs:
         run: |
           PLAN_FILE="environments/${TF_ENV}/drift-pre-apply.txt"
           PLAN_EXIT=0
+
+          if [ "${{ steps.state_version.outputs.state_exists }}" != "true" ]; then
+            echo "No remote state exists yet; skipping drift detection for initial deployment." | tee "${PLAN_FILE}"
+            echo "drift_exit=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           terraform -chdir="environments/${TF_ENV}" plan \
             -detailed-exitcode \
