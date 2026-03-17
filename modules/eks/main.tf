@@ -44,10 +44,10 @@ resource "aws_kms_key_policy" "eks" {
         Resource = "*"
       },
       {
-        Sid    = "AllowEKSAndLogsUse"
+        Sid    = "AllowEKSUse"
         Effect = "Allow"
         Principal = {
-          Service = ["eks.amazonaws.com", "logs.${data.aws_region.current.region}.amazonaws.com"]
+          Service = "eks.amazonaws.com"
         }
         Action = [
           "kms:Decrypt",
@@ -55,6 +55,26 @@ resource "aws_kms_key_policy" "eks" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudWatchLogs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt*",
+          "kms:Decrypt*",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:Describe*"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
       }
     ]
   })
@@ -72,6 +92,8 @@ resource "aws_cloudwatch_log_group" "eks" {
   kms_key_id        = aws_kms_key.eks.arn
 
   tags = { Name = "${var.project_name}-eks-logs" }
+
+  depends_on = [aws_kms_key_policy.eks]
 }
 
 # ─── IAM Role for EKS Control Plane ─────────────────────────────────────────
