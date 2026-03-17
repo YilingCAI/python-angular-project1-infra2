@@ -33,6 +33,10 @@ inputs:
     description: Post plan output comment to PR
     required: false
     default: "false"
+  plan_state_version:
+    description: Remote state version ID captured at plan time (for stale-plan detection)
+    required: false
+    default: "unknown"
 
 outputs:
   plan_artifact_id:
@@ -81,6 +85,15 @@ runs:
           -lock-timeout=5m \
           -out="tfplan.binary" \
           -no-color 2>&1 | tee "environments/${{ inputs.target_environment }}/plan-output.txt"
+
+        cat > "environments/${{ inputs.target_environment }}/plan-metadata.env" <<EOF
+        PLAN_STATE_VERSION=${{ inputs.plan_state_version }}
+        PLAN_SHA=${{ github.sha }}
+        PLAN_RUN_ID=${{ github.run_id }}
+        PLAN_RUN_ATTEMPT=${{ github.run_attempt }}
+        PLAN_ENVIRONMENT=${{ inputs.target_environment }}
+        PLAN_GENERATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        EOF
 
     # ── Drift-detection plan ──────────────────────────────────────────────────
     # Uses -detailed-exitcode: 0=no changes, 1=error, 2=changes/drift.
@@ -227,6 +240,7 @@ runs:
           environments/${{ inputs.target_environment }}/plan.tfplan
           environments/${{ inputs.target_environment }}/plan.json
           environments/${{ inputs.target_environment }}/tfplan.binary
+          environments/${{ inputs.target_environment }}/plan-metadata.env
           environments/${{ inputs.target_environment }}/infracost.json
 
     - name: Post plan to PR
