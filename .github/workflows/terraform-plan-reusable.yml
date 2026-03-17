@@ -103,6 +103,31 @@ jobs:
           aws_oidc_role_arn: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           role_session_name_prefix: ${{ inputs.drift && 'gha-terraform-drift' || inputs.speculative && 'gha-terraform-plan-speculative' || 'gha-terraform-plan' }}
 
+      - name: Capture plan-time remote state version
+        id: state_version
+        if: ${{ !inputs.speculative && !inputs.drift }}
+        shell: bash
+        run: |
+          STATE_KEY="${TF_ENV}/terraform.tfstate"
+          BUCKET="${{ secrets.TERRAFORM_STATE_BUCKET }}"
+
+          if [ -z "${BUCKET}" ]; then
+            echo "version_id=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERSION_ID=$(aws s3api list-object-versions \
+            --bucket "${BUCKET}" \
+            --prefix "${STATE_KEY}" \
+            --query "Versions[?IsLatest && Key=='${STATE_KEY}'].VersionId | [0]" \
+            --output text)
+
+          if [ -z "${VERSION_ID}" ] || [ "${VERSION_ID}" = "None" ]; then
+            echo "version_id=none" >> "$GITHUB_OUTPUT"
+          else
+            echo "version_id=${VERSION_ID}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Terraform shared plan steps
         id: plan_common
         uses: ./.github/actions/terraform-plan-common
@@ -114,6 +139,7 @@ jobs:
           enable_infracost: ${{ inputs.speculative && inputs.enable_infracost }}
           infracost_api_key: ${{ secrets.INFRACOST_API_KEY }}
           enable_pr_comment: ${{ inputs.enable_pr_comment }}
+          plan_state_version: ${{ steps.state_version.outputs.version_id || 'unknown' }}
 
       - name: Workflow summary
         if: always() && !inputs.drift

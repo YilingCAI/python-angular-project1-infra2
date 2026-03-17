@@ -157,17 +157,17 @@ jobs:
           retention-days: 14
 
       - name: Stop apply when drift exists
-        if: ${{ inputs.fail_on_drift && steps.drift.outputs.drift_exit == '2' && !(inputs.target_environment == 'dev' && steps.drift.outputs.taint_replacement == 'true') }}
+        if: ${{ inputs.target_environment != 'dev' && inputs.fail_on_drift && steps.drift.outputs.drift_exit == '2' }}
         shell: bash
         run: |
           echo "::error::Drift detected in ${TF_ENV}. Aborting apply to protect promotion integrity."
           exit 1
 
-      - name: Allow dev apply on taint-only drift
-        if: ${{ inputs.target_environment == 'dev' && steps.drift.outputs.drift_exit == '2' && steps.drift.outputs.taint_replacement == 'true' }}
+      - name: Allow dev apply when drift exists
+        if: ${{ inputs.target_environment == 'dev' && steps.drift.outputs.drift_exit == '2' }}
         shell: bash
         run: |
-          echo "::warning::Proceeding with dev apply because drift is taint-related."
+          echo "::warning::Proceeding with dev apply despite drift output. Drift blocking remains enforced for staging/prod."
 
       # ── Download saved plan artifact ──────────────────────────────────────────
       - name: Download saved plan artifact (by ID)
@@ -185,6 +185,64 @@ jobs:
           name: ${{ inputs.saved_plan_artifact_name }}
           path: environments/${{ inputs.target_environment }}
 
+      - name: Load saved plan metadata
+        id: plan_meta
+        shell: bash
+        run: |
+          META_FILE="environments/${TF_ENV}/plan-metadata.env"
+          if [ ! -f "${META_FILE}" ]; then
+            echo "metadata_present=false" >> "$GITHUB_OUTPUT"
+            echo "plan_state_version=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PLAN_STATE_VERSION=$(awk -F '=' '/^PLAN_STATE_VERSION=/{print $2}' "${META_FILE}" | tail -n 1)
+          if [ -z "${PLAN_STATE_VERSION}" ]; then
+            PLAN_STATE_VERSION="unknown"
+          fi
+
+          echo "metadata_present=true" >> "$GITHUB_OUTPUT"
+          echo "plan_state_version=${PLAN_STATE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Classify stale saved plan
+        id: plan_freshness
+        shell: bash
+        run: |
+          STALE=false
+          PLAN_STATE="${{ steps.plan_meta.outputs.plan_state_version }}"
+          CURRENT_STATE="${{ steps.state_version.outputs.version_id }}"
+
+          if [ "${{ steps.state_version.outputs.state_exists }}" = "true" ] \
+            && [ "${PLAN_STATE}" != "unknown" ] \
+            && [ "${PLAN_STATE}" != "none" ] \
+            && [ "${CURRENT_STATE}" != "unknown" ] \
+            && [ "${CURRENT_STATE}" != "none" ] \
+            && [ "${PLAN_STATE}" != "${CURRENT_STATE}" ]; then
+            STALE=true
+          fi
+
+          echo "stale=${STALE}" >> "$GITHUB_OUTPUT"
+
+      - name: Fail on stale saved plan (staging/prod)
+        if: ${{ inputs.target_environment != 'dev' && steps.plan_freshness.outputs.stale == 'true' }}
+        shell: bash
+        run: |
+          echo "::error::Saved plan is stale for ${TF_ENV}. Re-run plan before apply."
+          echo "::error::Plan state version: ${{ steps.plan_meta.outputs.plan_state_version }}"
+          echo "::error::Current state version: ${{ steps.state_version.outputs.version_id }}"
+          exit 1
+
+      - name: Rebuild plan in dev when saved plan is stale
+        if: ${{ inputs.target_environment == 'dev' && steps.plan_freshness.outputs.stale == 'true' }}
+        shell: bash
+        run: |
+          echo "::warning::Saved plan is stale for dev. Regenerating tfplan.binary from latest state."
+          terraform -chdir="environments/${TF_ENV}" plan \
+            ${{ steps.vars.outputs.var_file_arg }} \
+            -lock-timeout=5m \
+            -out="tfplan.binary" \
+            -no-color 2>&1 | tee "environments/${TF_ENV}/plan-output-dev-rebuilt.txt"
+
       - name: Verify saved plan file exists
         shell: bash
         run: |
@@ -195,7 +253,7 @@ jobs:
 
       # ── Apply ─────────────────────────────────────────────────────────────────
       - name: Terraform apply
-        if: ${{ steps.drift.outputs.drift_exit != '1' && (steps.drift.outputs.drift_exit == '0' || !inputs.fail_on_drift) }}
+        if: ${{ steps.drift.outputs.drift_exit != '1' && (steps.drift.outputs.drift_exit == '0' || !inputs.fail_on_drift || (inputs.target_environment == 'dev' && steps.drift.outputs.drift_exit == '2')) }}
         shell: bash
         run: |
           terraform -chdir="environments/${TF_ENV}" apply \
@@ -218,6 +276,9 @@ jobs:
             echo "| **Environment** | \`${TF_ENV}\` |"
             echo "| **Plan artifact** | \`${{ inputs.saved_plan_artifact_name }}\` |"
             echo "| **Plan artifact ID** | \`${{ inputs.saved_plan_artifact_id != '' && inputs.saved_plan_artifact_id || 'name fallback' }}\` |"
+            echo "| **Plan metadata present** | \`${{ steps.plan_meta.outputs.metadata_present }}\` |"
+            echo "| **Plan state version** | \`${{ steps.plan_meta.outputs.plan_state_version }}\` |"
+            echo "| **Saved plan stale** | \`${{ steps.plan_freshness.outputs.stale }}\` |"
             echo "| **Pre-apply drift check** | exit code ${{ steps.drift.outputs.drift_exit }} |"
             echo "| **Pre-apply state version** | \`${{ steps.state_version.outputs.version_id }}\` |"
             echo "| **Triggered by** | @${{ github.actor }} |"
