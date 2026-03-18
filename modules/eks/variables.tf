@@ -110,3 +110,9 @@ variable "kms_key_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "admin_iam_arns" {
+  description = "IAM user or role ARNs granted AmazonEKSClusterAdminPolicy (cluster-admin). Use for human operators who need kubectl access."
+  type        = list(string)
+  default     = []
+}

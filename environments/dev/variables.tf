@@ -291,3 +291,9 @@ variable "argocd_create_app_project" {
   type        = bool
   default     = false
 }
+
+variable "admin_iam_arns" {
+  description = "IAM user or role ARNs granted cluster-admin via EKS Access Entry (for kubectl access)"
+  type        = list(string)
+  default     = []
+}
