@@ -56,7 +56,7 @@ argocd_server_replicas    = 1
 argocd_create_app_project = false # Enable after first apply
 
 # App-of-apps bootstrap (set after ArgoCD is running)
-argocd_app_repo_url = "" # e.g. https://github.com/org/mypythonproject1
+argocd_app_repo_url = "k8s-mypythonproject1d-c66717b353-1150419392.us-east-1.elb.amazonaws.com" # e.g. https://github.com/org/mypythonproject1
 argocd_app_revision = "dev"
 argocd_app_path     = "k8s/overlay/dev"
 
