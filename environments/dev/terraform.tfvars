@@ -57,8 +57,8 @@ argocd_create_app_project = false # Enable after first apply
 
 # App-of-apps bootstrap (set after ArgoCD is running)
 argocd_app_repo_url = "https://github.com/YilingCAI/python-angular-project1-gitops.git" # e.g. https://github.com/org/mypythonproject1
-argocd_app_revision = "dev"
-argocd_app_path     = "k8s/overlay/dev"
+argocd_app_revision = "main"
+argocd_app_path     = "apps"
 
 # EKS cluster-admin access for human operators (kubectl)
 admin_iam_arns = [
