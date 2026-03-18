@@ -437,26 +437,11 @@ resource "aws_iam_role_policy_attachment" "app_secrets" {
 # ─── EKS Add-ons ─────────────────────────────────────────────────────────────
 # ─── EKS Access Entries ─────────────────────────────────────────────────────
 # Uses the EKS Access Entry API (replaces the legacy aws-auth ConfigMap).
-# Each principal gets a cluster-scoped access policy association.
-
-# GitHubActionsRole — needs cluster admin to run kubectl apply in CI/CD
-resource "aws_eks_access_entry" "github_actions" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/GitHubActionsRole"
-  type          = "STANDARD"
-
-  tags = { Name = "${var.project_name}-access-github-actions" }
-}
-
-resource "aws_eks_access_policy_association" "github_actions" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = aws_eks_access_entry.github_actions.principal_arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-
-  access_scope {
-    type = "cluster"
-  }
-}
+#
+# GitHubActionsRole is intentionally NOT listed here. The cluster is created
+# by GitHubActionsRole, and access_config.bootstrap_cluster_creator_admin_permissions=true
+# already grants it cluster-admin automatically. Adding an explicit entry
+# causes a 409 ResourceInUseException conflict.
 
 # Additional admin principals (IAM users/roles) — e.g. cloud_user for kubectl
 resource "aws_eks_access_entry" "admins" {
