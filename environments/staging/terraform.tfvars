@@ -43,7 +43,7 @@ certificate_arn   = "" # Add your ACM certificate ARN here
 # cluster_autoscaler_chart_version  = "9.46.0"
 
 # ArgoCD
-argocd_chart_version      = "7.8.3"
+argocd_chart_version = "7.8.3"
 # nip.io — no domain required (HTTP only).
 # Step 1: Apply with this placeholder — the ALB will be created.
 # Step 2: Get the ALB IP:  dig +short $(kubectl get ingress -n argocd -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}') | head -1
