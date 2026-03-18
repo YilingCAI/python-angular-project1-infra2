@@ -14,6 +14,7 @@ state_bucket_names = {
 github_actions_role_name = "GitHubActionsRole"
 
 github_oidc_subjects = [
+  # infra2 repo — Terraform CI/CD
   "repo:YilingCAI/python-angular-project1-infra2:environment:dev",
   "repo:YilingCAI/python-angular-project1-infra2:environment:staging",
   "repo:YilingCAI/python-angular-project1-infra2:environment:prod",
@@ -23,7 +24,18 @@ github_oidc_subjects = [
   "repo:YilingCAI/python-angular-project1-infra2:ref:refs/heads/main",
   "repo:yilingcai/python-angular-project1-infra2:ref:refs/heads/main",
   "repo:YilingCAI/python-angular-project1-infra2:pull_request",
-  "repo:yilingcai/python-angular-project1-infra2:pull_request"
+  "repo:yilingcai/python-angular-project1-infra2:pull_request",
+
+  # app repo — CD workflow (ECR push)
+  "repo:YilingCAI/python-augular-project1:environment:dev",
+  "repo:YilingCAI/python-augular-project1:environment:staging",
+  "repo:YilingCAI/python-augular-project1:environment:prod",
+  "repo:yilingcai/python-augular-project1:environment:dev",
+  "repo:yilingcai/python-augular-project1:environment:staging",
+  "repo:yilingcai/python-augular-project1:environment:prod",
+  "repo:YilingCAI/python-angular-project1:ref:refs/heads/main",
+  "repo:YilingCAI/python-angular-project1:ref:refs/heads/developer",
+  "repo:YilingCAI/python-angular-project1:ref:refs/heads/feature/*"
 ]
 
 oidc_thumbprints = [

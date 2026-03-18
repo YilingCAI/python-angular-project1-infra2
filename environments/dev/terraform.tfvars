@@ -50,13 +50,13 @@ argocd_chart_version = "7.8.3"
 # Step 3: Replace <IP> below with the result (e.g. 1.2.3.4) and re-apply:
 #           argocd_hostname = "argocd.<IP>.nip.io"
 # Step 4: Set GitHub secret ARGOCD_SERVER = argocd.<IP>.nip.io  (no http://)
-argocd_hostname           = "argocd.127.0.0.1.nip.io" # REPLACE 127.0.0.1 with real ALB IP
+argocd_hostname           = "argocd.8s-mypythonproject1d-c66717b353-1150419392.us-east-1.elb.amazonaws.com.nip.io" # REPLACE 127.0.0.1 with real ALB IP
 argocd_ingress_enabled    = true
 argocd_server_replicas    = 1
 argocd_create_app_project = false # Enable after first apply
 
 # App-of-apps bootstrap (set after ArgoCD is running)
-argocd_app_repo_url = "k8s-mypythonproject1d-c66717b353-1150419392.us-east-1.elb.amazonaws.com" # e.g. https://github.com/org/mypythonproject1
+argocd_app_repo_url = "https://github.com/YilingCAI/python-angular-project1-gitops.git" # e.g. https://github.com/org/mypythonproject1
 argocd_app_revision = "dev"
 argocd_app_path     = "k8s/overlay/dev"
 
