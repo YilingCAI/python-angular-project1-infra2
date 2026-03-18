@@ -44,7 +44,13 @@ certificate_arn   = "" # REQUIRED: Add your ACM certificate ARN here for product
 
 # ArgoCD — HA configuration for production
 argocd_chart_version      = "7.8.3"
-argocd_hostname           = "argocd.prod.example.com" # Replace with your domain
+# nip.io — no domain required (HTTP only).
+# Step 1: Apply with this placeholder — the ALB will be created.
+# Step 2: Get the ALB IP:  dig +short $(kubectl get ingress -n argocd -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}') | head -1
+# Step 3: Replace <IP> below with the result (e.g. 1.2.3.4) and re-apply:
+#           argocd_hostname = "argocd.<IP>.nip.io"
+# Step 4: Set GitHub secret ARGOCD_SERVER = argocd.<IP>.nip.io  (no http://)
+argocd_hostname           = "argocd.127.0.0.1.nip.io" # REPLACE 127.0.0.1 with real ALB IP
 argocd_ingress_enabled    = true
 argocd_server_replicas    = 2     # HA: 2 replicas in prod
 argocd_create_app_project = false # Enable after first apply
