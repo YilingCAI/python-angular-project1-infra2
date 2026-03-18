@@ -54,5 +54,10 @@ argocd_app_repo_url = "" # e.g. https://github.com/org/mypythonproject1
 argocd_app_revision = "staging"
 argocd_app_path     = "k8s/overlay/staging"
 
+# EKS cluster-admin access for human operators (kubectl)
+admin_iam_arns = [
+  "arn:aws:iam::730335510642:user/cloud_user",
+]
+
 # JWT (provide during terraform apply)
 # jwt_secret_key = "your-secret-key-here"

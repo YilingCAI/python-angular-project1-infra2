@@ -202,6 +202,7 @@ module "eks" {
   log_retention_days          = var.log_retention_days
   app_namespace               = var.app_namespace
   app_service_account         = var.app_service_account
+  admin_iam_arns              = var.admin_iam_arns
 
   secrets_arns = [
     module.rds.secret_arn,

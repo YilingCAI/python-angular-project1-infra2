@@ -53,3 +53,8 @@ argocd_create_app_project = false # Enable after first apply
 argocd_app_repo_url = "" # e.g. https://github.com/org/mypythonproject1
 argocd_app_revision = "dev"
 argocd_app_path     = "k8s/overlay/dev"
+
+# EKS cluster-admin access for human operators (kubectl)
+admin_iam_arns = [
+  "arn:aws:iam::730335510642:user/cloud_user",
+]
