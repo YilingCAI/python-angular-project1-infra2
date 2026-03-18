@@ -27,6 +27,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.8"
     }
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = "~> 1.14"
+    }
   }
 
   # Partial S3 backend configuration — all values injected at `terraform init` time
