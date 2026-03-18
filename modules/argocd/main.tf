@@ -31,6 +31,10 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = ">= 2.0"
     }
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = ">= 1.14"
+    }
   }
 }
 
@@ -147,11 +151,13 @@ resource "helm_release" "argocd" {
 
 # ─── ArgoCD AppProject ────────────────────────────────────────────────────────
 # Scopes allowed source repos and target namespaces for this environment.
-# Note: Requires ArgoCD CRDs to exist — only applied after ArgoCD is running.
-resource "kubernetes_manifest" "app_project" {
+# kubectl_manifest is used instead of kubernetes_manifest so that Terraform does
+# not validate the CRD against the API server at plan time (the CRD only exists
+# after helm_release.argocd runs).
+resource "kubectl_manifest" "app_project" {
   count = var.create_app_project ? 1 : 0
 
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "AppProject"
     metadata = {
@@ -174,7 +180,7 @@ resource "kubernetes_manifest" "app_project" {
         { group = "*", kind = "*" }
       ]
     }
-  }
+  })
 
   depends_on = [helm_release.argocd]
 }
@@ -182,10 +188,12 @@ resource "kubernetes_manifest" "app_project" {
 # ─── Bootstrap Application (app-of-apps) ─────────────────────────────────────
 # Points ArgoCD at the application GitOps directory.
 # Only created when app_repo_url is set (leave empty on first apply).
-resource "kubernetes_manifest" "bootstrap_app" {
+# kubectl_manifest is used instead of kubernetes_manifest so that Terraform does
+# not validate the CRD against the API server at plan time.
+resource "kubectl_manifest" "bootstrap_app" {
   count = var.app_repo_url != "" ? 1 : 0
 
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata = {
@@ -218,10 +226,10 @@ resource "kubernetes_manifest" "bootstrap_app" {
         ]
       }
     }
-  }
+  })
 
   depends_on = [
     helm_release.argocd,
-    kubernetes_manifest.app_project,
+    kubectl_manifest.app_project,
   ]
 }
