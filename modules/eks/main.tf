@@ -147,6 +147,14 @@ resource "aws_eks_cluster" "main" {
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
+  # Enable the Access Entry API so aws_eks_access_entry resources work.
+  # API_AND_CONFIG_MAP preserves backward compatibility with any existing
+  # aws-auth ConfigMap entries while also enabling the new API.
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
   tags = { Name = var.cluster_name }
 
   depends_on = [
