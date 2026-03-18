@@ -69,6 +69,7 @@ locals {
         "admin.enabled"                      = "true"
         "application.resourceTrackingMethod" = "annotation"
         "timeout.reconciliation"             = "180s"
+        "accounts.admin"                     = "login,apiKey"
       }
       rbac = {
         # Default to read-only; promote users/groups via RBAC policies
