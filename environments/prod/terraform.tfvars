@@ -62,7 +62,7 @@ argocd_app_path     = "apps/production"
 
 # EKS cluster-admin access for human operators (kubectl)
 admin_iam_arns = [
-  "arn:aws:iam::771743056978:user/cloud_user",
+  "arn:aws:iam::567781376531:user/cloud_user",
 ]
 
 # JWT (provide during terraform apply)
