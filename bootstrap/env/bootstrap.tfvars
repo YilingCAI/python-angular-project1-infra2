@@ -1,6 +1,6 @@
 aws_region          = "us-east-1"
 project_name        = "mypythonproject1"
-expected_account_id = "771743056978"
+expected_account_id = "567781376531"
 
 environments = ["dev", "staging", "prod"]
 
@@ -18,24 +18,16 @@ github_oidc_subjects = [
   "repo:YilingCAI/python-angular-project1-infra2:environment:dev",
   "repo:YilingCAI/python-angular-project1-infra2:environment:staging",
   "repo:YilingCAI/python-angular-project1-infra2:environment:prod",
-  "repo:yilingcai/python-angular-project1-infra2:environment:dev",
-  "repo:yilingcai/python-angular-project1-infra2:environment:staging",
-  "repo:yilingcai/python-angular-project1-infra2:environment:prod",
   "repo:YilingCAI/python-angular-project1-infra2:ref:refs/heads/main",
-  "repo:yilingcai/python-angular-project1-infra2:ref:refs/heads/main",
   "repo:YilingCAI/python-angular-project1-infra2:pull_request",
-  "repo:yilingcai/python-angular-project1-infra2:pull_request",
 
-  # app repo — CD workflow (ECR push)
-  "repo:YilingCAI/python-augular-project1:environment:dev",
-  "repo:YilingCAI/python-augular-project1:environment:staging",
-  "repo:YilingCAI/python-augular-project1:environment:prod",
-  "repo:yilingcai/python-augular-project1:environment:dev",
-  "repo:yilingcai/python-augular-project1:environment:staging",
-  "repo:yilingcai/python-augular-project1:environment:prod",
-  "repo:YilingCAI/python-angular-project1:ref:refs/heads/main",
-  "repo:YilingCAI/python-angular-project1:ref:refs/heads/developer",
-  "repo:YilingCAI/python-angular-project1:ref:refs/heads/feature/*"
+  # app repo — CD workflow (ECR push + EKS deploy)
+  "repo:YilingCAI/python-devops-aws-project1:environment:dev",
+  "repo:YilingCAI/python-devops-aws-project1:environment:staging",
+  "repo:YilingCAI/python-devops-aws-project1:environment:prod",
+  "repo:YilingCAI/python-devops-aws-project1:ref:refs/heads/main",
+  "repo:YilingCAI/python-devops-aws-project1:ref:refs/heads/developer",
+  "repo:YilingCAI/python-devops-aws-project1:ref:refs/heads/feature/*"
 ]
 
 oidc_thumbprints = [
