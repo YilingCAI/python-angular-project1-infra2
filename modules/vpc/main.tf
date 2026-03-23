@@ -327,14 +327,6 @@ resource "aws_security_group" "rds" {
   description = "RDS security group - allows PostgreSQL from EKS nodes"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description     = "PostgreSQL from EKS nodes"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_nodes.id]
-  }
-
   egress {
     description = "RDS outbound HTTPS"
     from_port   = 443
@@ -344,4 +336,15 @@ resource "aws_security_group" "rds" {
   }
 
   tags = { Name = "${var.project_name}-rds-sg" }
+}
+
+# Standalone rules to break the cycle between eks_nodes ↔ rds
+resource "aws_security_group_rule" "rds_from_eks_nodes" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.rds.id
+  source_security_group_id = aws_security_group.eks_nodes.id
+  description              = "PostgreSQL from EKS nodes"
 }
