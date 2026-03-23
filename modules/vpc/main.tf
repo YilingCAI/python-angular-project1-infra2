@@ -303,18 +303,21 @@ resource "aws_security_group" "eks_nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress {
-    description     = "PostgreSQL to RDS"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
-  }
-
   tags = {
     Name                                        = "${var.project_name}-eks-nodes-sg"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   }
+}
+
+# Standalone rule to break the cycle: eks_nodes → rds on 5432
+resource "aws_security_group_rule" "eks_nodes_to_rds" {
+  type                     = "egress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_nodes.id
+  source_security_group_id = aws_security_group.rds.id
+  description              = "PostgreSQL to RDS"
 }
 
 # RDS Security Group
@@ -323,14 +326,6 @@ resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
   description = "RDS security group - allows PostgreSQL from EKS nodes"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description     = "PostgreSQL from EKS nodes"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_nodes.id]
-  }
 
   egress {
     description = "RDS outbound HTTPS"
@@ -341,4 +336,15 @@ resource "aws_security_group" "rds" {
   }
 
   tags = { Name = "${var.project_name}-rds-sg" }
+}
+
+# Standalone rules to break the cycle between eks_nodes ↔ rds
+resource "aws_security_group_rule" "rds_from_eks_nodes" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.rds.id
+  source_security_group_id = aws_security_group.eks_nodes.id
+  description              = "PostgreSQL from EKS nodes"
 }
