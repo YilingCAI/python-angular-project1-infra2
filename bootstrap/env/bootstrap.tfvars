@@ -1,6 +1,6 @@
 aws_region          = "us-east-1"
 project_name        = "mypythonproject1"
-expected_account_id = "128977215002"
+expected_account_id = "771743056978"
 
 environments = ["dev", "staging", "prod"]
 
@@ -22,12 +22,12 @@ github_oidc_subjects = [
   "repo:YilingCAI/python-angular-project1-infra2:pull_request",
 
   # app repo — CD workflow (ECR push + EKS deploy)
-  "repo:YilingCAI/python-devops-aws-project1:environment:dev",
-  "repo:YilingCAI/python-devops-aws-project1:environment:staging",
-  "repo:YilingCAI/python-devops-aws-project1:environment:prod",
-  "repo:YilingCAI/python-devops-aws-project1:ref:refs/heads/main",
-  "repo:YilingCAI/python-devops-aws-project1:ref:refs/heads/developer",
-  "repo:YilingCAI/python-devops-aws-project1:ref:refs/heads/feature/*"
+  "repo:YilingCAI/python-angular-project1:environment:dev",
+  "repo:YilingCAI/python-angular-project1:environment:staging",
+  "repo:YilingCAI/python-angular-project1:environment:prod",
+  "repo:YilingCAI/python-angular-project1:ref:refs/heads/main",
+  "repo:YilingCAI/python-angular-project1:ref:refs/heads/developer",
+  "repo:YilingCAI/python-angular-project1:ref:refs/heads/feature/*"
 ]
 
 oidc_thumbprints = [
