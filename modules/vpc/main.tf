@@ -348,3 +348,16 @@ resource "aws_security_group_rule" "rds_from_eks_nodes" {
   source_security_group_id = aws_security_group.eks_nodes.id
   description              = "PostgreSQL from EKS nodes"
 }
+
+# CIDR-based ingress: EKS managed node groups use the AWS-created cluster SG
+# (not the Terraform-managed eks_nodes SG), so we also allow by private subnet CIDR.
+resource "aws_security_group_rule" "rds_from_private_subnets" {
+  count             = length(var.private_subnet_cidrs)
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  security_group_id = aws_security_group.rds.id
+  cidr_blocks       = [var.private_subnet_cidrs[count.index]]
+  description       = "PostgreSQL from private subnet ${count.index + 1}"
+}
