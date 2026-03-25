@@ -61,6 +61,9 @@ argocd_app_revision = "main"
 argocd_app_path     = "apps/dev"
 
 # EKS cluster-admin access for human operators (kubectl)
+# Empty by default — add valid IAM principals from the current account when needed
+# Format: "arn:aws:iam::<account-id>:user/<name>" or "arn:aws:iam::<account-id>:role/<name>"
 admin_iam_arns = [
-  "arn:aws:iam::584545443115:user/cloud_user",
+  # Example (replace with actual account and principal):
+  # "arn:aws:iam::767397871938:role/PlatformAdmin",
 ]

@@ -443,32 +443,12 @@ resource "aws_iam_role_policy_attachment" "app_secrets" {
 # already grants it cluster-admin automatically. Adding an explicit entry
 # causes a 409 ResourceInUseException conflict.
 
-# Filter admin principals to only those in the current AWS account.
-# This prevents "InvalidParameterException: invalid principal" errors from the EKS API
-# when principals are cross-account or from non-existent IAM users/roles.
-locals {
-  current_account_id = data.aws_caller_identity.current.account_id
-  
-  # Extract account ID from each principal ARN
-  # Valid format: arn:aws:iam::<account-id>:user/<name> or arn:aws:iam::<account-id>:role/<name>
-  admin_principals_by_account = {
-    for arn in var.admin_iam_arns :
-    arn => try(
-      regex("^arn:aws:iam::(\\d+):", arn)[0],
-      null
-    )
-  }
-  
-  # Only create access entries for principals in the CURRENT account
-  valid_admin_arns = [
-    for arn, account_id in local.admin_principals_by_account :
-    arn if account_id != null && account_id == local.current_account_id
-  ]
-}
-
 # Additional admin principals (IAM users/roles) — e.g. cloud_user for kubectl
+# Only create access entries for principals provided (validation happens at apply time).
+# If you encounter "invalid principal" errors, verify the ARN exists in the current AWS account
+# and matches the format: arn:aws:iam::<account-id>:user/<name> or arn:aws:iam::<account-id>:role/<name>
 resource "aws_eks_access_entry" "admins" {
-  for_each = toset(local.valid_admin_arns)
+  for_each = toset(var.admin_iam_arns)
 
   cluster_name  = aws_eks_cluster.main.name
   principal_arn = each.value
