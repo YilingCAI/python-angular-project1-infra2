@@ -448,7 +448,7 @@ resource "aws_iam_role_policy_attachment" "app_secrets" {
 # If you encounter "invalid principal" errors, verify the ARN exists in the current AWS account
 # and matches the format: arn:aws:iam::<account-id>:user/<name> or arn:aws:iam::<account-id>:role/<name>
 resource "aws_eks_access_entry" "admins" {
-  for_each = toset(var.admin_iam_arns)
+  for_each = { for idx, arn in var.admin_iam_arns : tostring(idx) => arn }
 
   cluster_name  = aws_eks_cluster.main.name
   principal_arn = each.value
@@ -458,7 +458,7 @@ resource "aws_eks_access_entry" "admins" {
 }
 
 resource "aws_eks_access_policy_association" "admins" {
-  for_each = toset(var.admin_iam_arns)
+  for_each = { for idx, arn in var.admin_iam_arns : tostring(idx) => arn }
 
   cluster_name  = aws_eks_cluster.main.name
   principal_arn = each.value
