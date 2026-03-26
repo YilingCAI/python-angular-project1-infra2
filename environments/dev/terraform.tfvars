@@ -50,7 +50,7 @@ argocd_chart_version = "7.8.3"
 # Step 3: Replace <IP> below with the result (e.g. 1.2.3.4) and re-apply:
 #           argocd_hostname = "argocd.<IP>.nip.io"
 # Step 4: Set GitHub secret ARGOCD_SERVER = argocd.<IP>.nip.io  (no http://)
-argocd_hostname           = "argocd.k8s-mypythonproject1d-c66717b353-320298779.us-east-1.elb.amazonaws.com.nip.io" # REPLACE 127.0.0.1 with real ALB IP
+argocd_hostname           = "argocd.98.94.169.149.nip.io"
 argocd_ingress_enabled    = true
 argocd_server_replicas    = 1
 argocd_create_app_project = true # Enable after first apply
