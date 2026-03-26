@@ -50,7 +50,7 @@ argocd_chart_version = "7.8.3"
 # Step 3: Replace <IP> below with the result (e.g. 1.2.3.4) and re-apply:
 #           argocd_hostname = "argocd.<IP>.nip.io"
 # Step 4: Set GitHub secret ARGOCD_SERVER = argocd.<IP>.nip.io  (no http://)
-argocd_hostname           = "argocd.k8s-mypythonproject1d-c66717b353-1039515523.us-east-1.elb.amazonaws.com.nip.io" # REPLACE 127.0.0.1 with real ALB IP
+argocd_hostname           = "argocd.k8s-mypythonproject1d-c66717b353-710132873.us-east-1.elb.amazonaws.com.nip.io" # REPLACE 127.0.0.1 with real ALB IP
 argocd_ingress_enabled    = true
 argocd_server_replicas    = 1
 argocd_create_app_project = true # Enable after first apply
@@ -62,5 +62,5 @@ argocd_app_path     = "apps/dev"
 
 # EKS cluster-admin access for human operators (kubectl)
 admin_iam_arns = [
-  "arn:aws:iam::584545443115:user/cloud_user",
+  "arn:aws:iam::478217620043:user/cloud_user",
 ]
