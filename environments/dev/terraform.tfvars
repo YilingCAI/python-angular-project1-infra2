@@ -62,5 +62,5 @@ argocd_app_path     = "apps/dev"
 
 # EKS cluster-admin access for human operators (kubectl)
 admin_iam_arns = [
-  "arn:aws:iam::478217620043:user/cloud_user",
+  "arn:aws:iam::383874798876:user/cloud_user",
 ]
